@@ -73,9 +73,12 @@ poisoned data reaching a widget that already holds grants.</p>
   const runtime = createRuntime({
     // Every decision, allowed or refused — otherwise a refusal is invisible.
     onAudit: (e) => {
-      if (e.decision === "refused") {
-        log(`  ✋ REFUSED  ${e.method}  (${e.reason})`);
-      }
+      // widgetId comes from the port the message arrived on — the widget never
+      // supplies it, so it cannot claim to be its neighbour.
+      const who = e.widgetId.slice(0, 8);
+      log(e.decision === "refused"
+        ? `  ✋ REFUSED  [${who}] ${e.method}  (${e.reason})`
+        : `  dispatch   [${who}] ${e.method}`);
     },
     capabilities: [
       {
@@ -86,7 +89,6 @@ poisoned data reaching a widget that already holds grants.</p>
             ? params.month : null;
           const all = await loadPoisoned();
           const rows = month ? all.filter((t) => t.date.startsWith(month)) : all;
-          log(`  dispatch  transactions.list → ${rows.length} rows`);
           return rows;
         },
       },
