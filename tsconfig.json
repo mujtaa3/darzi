@@ -1,0 +1,25 @@
+{
+  // tsconfig.json supports comments (it's JSONC, not strict JSON).
+  "compilerOptions": {
+    // --- What JavaScript to emit ---
+    "target": "ES2022", // language level of the output; modern browsers all support this
+    "module": "nodenext", // emit real ES modules
+    "moduleResolution": "nodenext", // errors if an import omits the .js extension — browsers require it
+    "lib": ["ES2022", "DOM"], // APIs we're allowed to use: the language, plus the browser (iframes, postMessage)
+
+    // --- Type checking ---
+    "strict": true, // the whole strictness family, including no implicit any and null checks
+    "noUncheckedIndexedAccess": true, // arr[i] is T | undefined, not T — you must handle the miss
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+
+    // --- Output ---
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true, // also emit .d.ts files: the API's types, for consumers' editors
+    "declarationMap": true, // lets a consumer "go to definition" into our .ts source
+    "sourceMap": true,
+    "verbatimModuleSyntax": true // makes type-only imports explicit, so erasure is never a surprise
+  },
+  "include": ["src"]
+}

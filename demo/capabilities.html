@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>marzi — rung 3: capabilities</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 46rem; padding: 0 1rem; }
+  h1 { font-size: 1.3rem; }
+  h2 { font-size: 1rem; margin-top: 2rem; }
+  .slot { border: 2px dashed #bbb; border-radius: 6px; padding: .5rem; }
+  .slot iframe { width: 100%; height: 120px; border: 0; }
+  .label { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: #777; margin-bottom: .2rem; }
+  code { background: #f0f0f0; padding: .1em .3em; border-radius: 3px; }
+  #log { background: #111; color: #b9f6b9; font: 13px/1.6 ui-monospace, monospace;
+         padding: .7rem .9rem; border-radius: 6px; min-height: 6rem; white-space: pre-wrap; }
+  nav a { font-size: .85rem; }
+</style>
+</head>
+<body>
+
+<nav><a href="./">&larr; rung 1: the jail and the attacks</a></nav>
+
+<h1>marzi rung 3 — capabilities</h1>
+
+<p>Same jail as before: opaque origin, no cookies, no network. The widget now
+asks the host for what it needs by name, over the private port. The host holds a
+registry of <code>name &rarr; handler</code> and answers.</p>
+
+<p><strong>No grants yet.</strong> Every registered capability is callable by
+every widget — which is exactly the hole rung 5 closes.</p>
+
+<h2>The widget</h2>
+<p class="label">widget slot</p>
+<div class="slot" id="slot"></div>
+
+<h2>What the switchboard sees</h2>
+<div id="log"></div>
+
+<script type="module">
+  import { createRuntime } from "../dist/index.js";
+
+  const logEl = document.getElementById("log");
+  const log = (line) => { logEl.textContent += line + "\n"; };
+
+  const runtime = createRuntime({
+    capabilities: [
+      {
+        name: "time.now",
+        description: "The current time on the host.",
+        handler: () => {
+          log("  dispatch  time.now");
+          return new Date().toLocaleTimeString();
+        },
+      },
+      {
+        // Lets the widget tell us what it actually received, so the loop is
+        // visible from outside the jail. The attack suite at rung 7 will use
+        // exactly this trick — a jailed widget has no other way to report.
+        name: "demo.report",
+        description: "Echo a line from the widget into the host's log.",
+        handler: (params) => {
+          const text = (params && typeof params === "object" && "text" in params)
+            ? String(params.text) : "(malformed)";
+          log("  widget received:  " + text);
+        },
+      },
+      {
+        name: "math.add",
+        description: "Add two numbers. params: { a, b }",
+        handler: (params) => {
+          log("  dispatch  math.add  " + JSON.stringify(params));
+          // `params` came from hostile code, so the handler narrows it before
+          // use. TypeScript cannot help here — the widget is not type-checked.
+          if (typeof params !== "object" || params === null) {
+            throw new Error("params must be an object");
+          }
+          const { a, b } = params;
+          if (typeof a !== "number" || typeof b !== "number") {
+            throw new Error("a and b must be numbers");
+          }
+          return a + b;
+        },
+      },
+    ],
+  });
+
+  // A widget that asks for three things. Two exist. One does not.
+  const widget = `
+    <style>
+      body { font: 14px/1.5 system-ui, sans-serif; margin: 0; }
+      .row { font-family: ui-monospace, monospace; font-size: 13px; }
+      .bad { color: #b00020; }
+      .good { color: #1b7f3b; }
+    </style>
+    <p>I have no network. I ask the host by name:</p>
+    <div id="out"></div>
+    <script>
+      var out = document.getElementById("out");
+      function line(text, cls) {
+        var d = document.createElement("div");
+        d.className = "row " + (cls || "");
+        d.textContent = text;
+        out.appendChild(d);
+        marzi.call("demo.report", { text: text }); // so the host can see it too
+      }
+
+      marzi.call("time.now").then(function (r) {
+        line("time.now() = " + r, "good");
+      });
+
+      marzi.call("math.add", { a: 2, b: 40 }).then(function (r) {
+        line("math.add(2, 40) = " + r, "good");
+      });
+
+      // Not in the registry. The host refuses, and the promise rejects.
+      marzi.call("secrets.dump").then(
+        function (r) { line("secrets.dump() = " + r, "bad"); },
+        function (e) { line("secrets.dump() refused: " + e.message, "good"); }
+      );
+    <\/script>
+  `;
+
+  log("createRuntime() — registry: time.now, math.add, demo.report");
+  runtime.render(widget, document.getElementById("slot"));
+</script>
+
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>marzi — injection through the data</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 50rem; padding: 0 1rem; }
+  h1 { font-size: 1.3rem; }
+  h2 { font-size: 1rem; margin-top: 2rem; }
+  nav a { font-size: .85rem; margin-right: 1rem; }
+  code { background: #f0f0f0; padding: .1em .3em; border-radius: 3px; }
+  .slot { border: 2px dashed #bbb; border-radius: 6px; padding: .5rem; }
+  .slot iframe { width: 100%; height: 210px; border: 0; }
+  .slot { overflow: hidden; }
+  .label { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: #777; margin-bottom: .2rem; }
+  #log { background: #111; color: #b9f6b9; font: 13px/1.6 ui-monospace, monospace;
+         padding: .7rem .9rem; border-radius: 6px; min-height: 5rem; white-space: pre-wrap; }
+  .alarm { color: #ff8080; font-weight: 700; }
+  .note { background: #fff8e5; border: 1px solid #e3d3a0; padding: .6rem .8rem; border-radius: 6px; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="./">rung 1: the jail</a>
+  <a href="./transactions.html">real data</a>
+  <a href="./studio.html">studio</a>
+</nav>
+
+<h1>Injection through the data</h1>
+
+<p>Nobody attacked the model here. Someone just got a string into the
+<em>transaction feed</em> — a merchant name, the kind of field a user never
+controls. Both widgets below are honest code rendering that data.</p>
+
+<p class="note"><strong>Note what is not being tested.</strong> Our generation
+prompt contains the template, the capability <em>descriptions</em>, and the
+user's request — <strong>never the data</strong>. So poisoned data cannot reach
+the model at generation time. This page tests the surface that does exist:
+poisoned data reaching a widget that already holds grants.</p>
+
+<h2>Widget A — renders merchant names with <code>textContent</code></h2>
+<p class="label">widget slot</p>
+<div class="slot" id="slot-safe"></div>
+
+<h2>Widget B — renders the same names with <code>innerHTML</code></h2>
+<p class="label">widget slot</p>
+<div class="slot" id="slot-unsafe"></div>
+
+<h2>What the switchboard sees</h2>
+<div id="log"></div>
+
+<script type="module">
+  import { createRuntime } from "../dist/index.js";
+
+  const logEl = document.getElementById("log");
+  const log = (line, alarm) => {
+    logEl.innerHTML += alarm ? `<span class="alarm">${line}</span>\n` : `${line}\n`;
+  };
+
+  let cache = null;
+  async function loadPoisoned() {
+    if (cache) return cache;
+    const text = await fetch("./transactions-poisoned.csv").then((r) => r.text());
+    const [, ...lines] = text.trim().split("\n");
+    cache = lines.map((line) => {
+      const [date, merchant, category, account, amount] = line.split(",");
+      return { date, merchant, category, account, amount: Number(amount) };
+    });
+    return cache;
+  }
+
+  const runtime = createRuntime({
+    // Every decision, allowed or refused — otherwise a refusal is invisible.
+    onAudit: (e) => {
+      if (e.decision === "refused") {
+        log(`  ✋ REFUSED  ${e.method}  (${e.reason})`);
+      }
+    },
+    capabilities: [
+      {
+        name: "transactions.list",
+        description: "The user's transactions — from a feed they do not control.",
+        handler: async (params) => {
+          const month = params && typeof params === "object" && typeof params.month === "string"
+            ? params.month : null;
+          const all = await loadPoisoned();
+          const rows = month ? all.filter((t) => t.date.startsWith(month)) : all;
+          log(`  dispatch  transactions.list → ${rows.length} rows`);
+          return rows;
+        },
+      },
+      {
+        // NOT granted — there is deliberately no "admin.export" here. The
+        // injected payload that reaches for it gets refused by the switchboard,
+        // exactly like any other ungranted call.
+        name: "__unused__",
+        description: "placeholder",
+        handler: () => null,
+      },
+      {
+        // Stands in for ANY capability this widget happens to hold. If the
+        // injected payload reaches this, it inherited the widget's authority.
+        name: "probe.stolen",
+        description: "A capability the widget was granted, for demonstration.",
+        handler: () => {
+          log("  ⚠ probe.stolen CALLED — by injected content, using the widget's grants", true);
+          return "ok";
+        },
+      },
+    ],
+  });
+
+  // Both widgets are honest. The ONLY difference is textContent vs innerHTML.
+  const makeWidget = (mode) => `
+    <style>
+      body { font: 13px/1.45 system-ui, sans-serif; margin: 0; }
+      .r { display: grid; grid-template-columns: 1fr 5rem; gap: .5rem;
+           padding: .12rem 0; border-bottom: 1px solid #f0f0f0; }
+      .m { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .a { text-align: right; font-family: ui-monospace, monospace; }
+    </style>
+    <div id="rows">loading…</div>
+    <script>
+      marzi.call("transactions.list", { month: "2026-08" }).then(function (txns) {
+        var host = document.getElementById("rows");
+        host.innerHTML = "";
+        txns.forEach(function (t) {
+          var row = document.createElement("div");
+          row.className = "r";
+          var m = document.createElement("div");
+          m.className = "m";
+          var a = document.createElement("div");
+          a.className = "a";
+          a.textContent = t.amount.toFixed(2);
+          row.appendChild(m); row.appendChild(a);
+          host.appendChild(row);
+          // Assign AFTER insertion. A detached element defers resource loads,
+          // which made this test non-deterministic; live code does both.
+          m.${mode} = t.merchant;          // <-- the only difference
+        });
+      });
+    <\/script>
+  `;
+
+  log("createRuntime() — registry: transactions.list, probe.stolen");
+  runtime.render(makeWidget("textContent"), document.getElementById("slot-safe"));
+  runtime.render(makeWidget("innerHTML"), document.getElementById("slot-unsafe"));
+</script>
+
+</body>
+</html>

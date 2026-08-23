@@ -1,0 +1,214 @@
+/**
+ * The demo app's backend.
+ *
+ * This exists for one reason: **the API key must never reach the browser.**
+ * marzi's own rule is that secrets stay on the host page or its backend, and a
+ * demo that leaked its key into a <script> tag would be teaching the opposite.
+ * This is also the realistic shape — a real adopter calls their own model from
+ * their own backend and hands marzi the result.
+ *
+ * marzi itself remains a pure frontend library. This server is the *app*.
+ *
+ *   export ANTHROPIC_API_KEY=sk-ant-...
+ *   node demo/server.js
+ *   open http://127.0.0.1:8000/demo/studio.html
+ */
+import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import { extname, join, normalize, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import Anthropic from "@anthropic-ai/sdk";
+
+const HERE = fileURLToPath(new URL(".", import.meta.url));
+const ROOT = resolve(HERE, "..");
+const PORT = Number(process.env.PORT) || 8000;
+
+const MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".csv": "text/csv; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+};
+
+/**
+ * The capability catalog, as described to the model.
+ *
+ * Descriptions are documentation only — they carry zero enforcement weight.
+ * What a capability may actually do is decided by the handler registered in the
+ * page, and (from rung 5) by that widget's grants.
+ */
+const CATALOG = [
+  {
+    name: "transactions.list",
+    description:
+      "The signed-in user's bank and card transactions.\n" +
+      "  params: { month: string }  — 'YYYY-MM', e.g. '2026-08'\n" +
+      "  returns: array of { date, merchant, category, account, amount }\n" +
+      "           amount is a number: negative for spending, positive for income.\n" +
+      "  Available months: 2026-07 and 2026-08.",
+  },
+];
+
+function catalogForPrompt() {
+  return CATALOG.map((c) => `- \`${c.name}\`\n  ${c.description}`).join("\n\n");
+}
+
+/** Pull the three blocks out of the model's reply. */
+function parseWidget(text) {
+  // Be forgiving about markdown fences the model may add around the whole reply.
+  const cleaned = text.replace(/^\s*```[a-z]*\s*/i, "").replace(/```\s*$/, "");
+
+  const grab = (tag) => {
+    const m = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(cleaned);
+    return m ? m[1].trim() : null;
+  };
+
+  const html = grab("widget");
+  if (!html) {
+    throw new Error("model did not return a <widget> block");
+  }
+
+  const capsRaw = grab("capabilities") ?? "";
+  return {
+    title: grab("title") ?? "Untitled widget",
+    capabilities: capsRaw.split(",").map((s) => s.trim()).filter(Boolean),
+    html,
+    raw: cleaned,
+  };
+}
+
+const client = new Anthropic(); // resolves ANTHROPIC_API_KEY from the environment
+
+async function generate(request) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error(
+      "ANTHROPIC_API_KEY is not set. Run:  export ANTHROPIC_API_KEY=sk-ant-...  then restart the server.",
+    );
+  }
+
+  const template = await readFile(join(ROOT, "prompts", "widget-author.md"), "utf8");
+
+  // The template file carries a header explaining itself; everything from the
+  // first horizontal rule onward is the actual prompt.
+  const body = template.slice(template.indexOf("\n---\n") + 5);
+
+  const prompt = body
+    .replace("{{CAPABILITIES}}", catalogForPrompt())
+    .replace("{{REQUEST}}", request);
+
+  const response = await client.messages.create({
+    model: "claude-opus-5",
+    max_tokens: 16000,
+    thinking: { type: "adaptive" },
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  if (response.stop_reason === "refusal") {
+    throw new Error(`model refused: ${response.stop_details?.explanation ?? "no reason given"}`);
+  }
+
+  const text = response.content
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("");
+
+  const widget = parseWidget(text);
+  widget.usage = {
+    input: response.usage.input_tokens,
+    output: response.usage.output_tokens,
+  };
+  return widget;
+}
+
+function readBody(req) {
+  return new Promise((ok, no) => {
+    let data = "";
+    req.on("data", (chunk) => {
+      data += chunk;
+      if (data.length > 1_000_000) no(new Error("request too large"));
+    });
+    req.on("end", () => ok(data));
+    req.on("error", no);
+  });
+}
+
+const server = createServer(async (req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (url.pathname === "/api/generate" && req.method === "POST") {
+    try {
+      const { request } = JSON.parse(await readBody(req));
+      if (typeof request !== "string" || !request.trim()) {
+        throw new Error("missing 'request'");
+      }
+      console.log(`\n▸ generating: ${request}`);
+      const widget = await generate(request);
+      console.log(
+        `  ✓ "${widget.title}"  caps=[${widget.capabilities.join(", ")}]  ` +
+          `${widget.html.length} bytes  (${widget.usage.input}→${widget.usage.output} tokens)`,
+      );
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(widget));
+    } catch (error) {
+      const message =
+        error instanceof Anthropic.AuthenticationError
+          ? "No valid API key. Set ANTHROPIC_API_KEY and restart the server."
+          : error.message;
+      console.error(`  ✗ ${message}`);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: message }));
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/catalog") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(CATALOG));
+    return;
+  }
+
+  // Static files. Two defences, because this process holds an API key:
+  //   1. `normalize` + a prefix check stop "../.." escaping the repo entirely.
+  //   2. An allowlist of servable directories — the rest of the repo (source,
+  //      node_modules, git config) is not the demo's to hand out.
+  // Path traversal is the same bug our HTTP capability adapter will have to
+  // defend against, so we may as well get it right here.
+  let requested = url.pathname === "/" ? "/demo/studio.html" : url.pathname;
+  if (requested.endsWith("/")) requested += "index.html"; // directory index
+  const filePath = join(ROOT, normalize(requested));
+
+  const SERVABLE = [join(ROOT, "demo"), join(ROOT, "dist")];
+  if (!SERVABLE.some((dir) => filePath.startsWith(dir + "/"))) {
+    res.writeHead(403).end("forbidden");
+    return;
+  }
+
+  try {
+    const content = await readFile(filePath);
+    res.writeHead(200, { "Content-Type": MIME[extname(filePath)] ?? "application/octet-stream" });
+    res.end(content);
+  } catch {
+    res.writeHead(404).end("not found");
+  }
+});
+
+server.on("error", (error) => {
+  if (error.code === "EADDRINUSE") {
+    console.error(
+      `\nPort ${PORT} is already in use — something else is still listening.\n` +
+        `Free it with:   lsof -ti:${PORT} | xargs kill\n` +
+        `Or run on another port:   PORT=8001 node demo/server.js\n`,
+    );
+    process.exit(1);
+  }
+  throw error;
+});
+
+server.listen(PORT, "127.0.0.1", () => {
+  console.log(`marzi demo → http://127.0.0.1:${PORT}/demo/studio.html`);
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.log("⚠  ANTHROPIC_API_KEY is not set — generation will fail until it is.");
+  }
+});
