@@ -48,8 +48,10 @@ export interface Capability {
   handler: CapabilityHandler;
 }
 
-/** A rendered widget: its frame, and the host's end of its private line. */
+/** A rendered widget: its identity, its frame, and how to tear it down. */
 export interface Widget {
+  /** Stable id. Grants, audit entries and stored state all key off this. */
+  id: string;
   /** The jail. Remove it from the DOM to destroy the widget. */
   frame: HTMLIFrameElement;
   /** Stop listening and tear the widget down. */
@@ -61,10 +63,17 @@ export interface Widget {
  *
  * Without this the host is blind to refusals — the runtime declines silently and
  * nothing outside can tell an ungranted call from one that never happened. This
- * is the seed of the audit log; it will grow a widget id and a timestamp once
- * rung 3.7 lands the `port → widgetId` map.
+ * is the seed of the audit log.
  */
 export interface AuditEvent {
+  /**
+   * Which widget asked.
+   *
+   * Derived from the port the message arrived on, never from anything the widget
+   * said. A widget cannot claim to be another widget, because it does not supply
+   * this value at all.
+   */
+  widgetId: string;
   method: string;
   decision: "dispatched" | "refused";
   /** Present on refusal: why. Safe to show a developer, not a widget. */
@@ -79,6 +88,23 @@ export interface RuntimeOptions {
 
 export interface Runtime {
   render(body: WidgetBody, container: HTMLElement): Widget;
+}
+
+/** Everything the runtime knows about one rendered widget. */
+interface LiveWidget {
+  id: string;
+  frame: HTMLIFrameElement;
+  /** The host end of its private line. Identity, not just transport. */
+  port: MessagePort;
+}
+
+function newWidgetId(): string {
+  // randomUUID needs a secure context; localhost qualifies, but fall back so a
+  // plain-http staging box does not throw.
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `w_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
 }
 
 /**
@@ -111,23 +137,38 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     }
   }
 
-  async function handleMessage(raw: unknown): Promise<RpcResponse | null> {
+  /**
+   * `widget` is supplied by the caller, which is the port's own message handler.
+   * It is never read out of the message. That is the whole reason a widget
+   * cannot impersonate another one: it has no field to lie in.
+   */
+  async function handleMessage(widget: LiveWidget, raw: unknown): Promise<RpcResponse | null> {
     const request = parseRequest(raw);
     if (request === null) {
       // Malformed and unidentifiable — there is no id to answer to, so the only
       // safe move is to drop it. Answering a message we cannot parse would mean
       // trusting a field from it.
-      audit({ method: "(unparseable)", decision: "refused", reason: "malformed message" });
+      audit({
+        widgetId: widget.id,
+        method: "(unparseable)",
+        decision: "refused",
+        reason: "malformed message",
+      });
       return null;
     }
 
     const capability = registry.get(request.method);
     if (capability === undefined) {
-      audit({ method: request.method, decision: "refused", reason: "no such capability" });
+      audit({
+        widgetId: widget.id,
+        method: request.method,
+        decision: "refused",
+        reason: "no such capability",
+      });
       return fail(request.id, RPC.METHOD_NOT_FOUND, `no such capability: ${request.method}`);
     }
 
-    audit({ method: request.method, decision: "dispatched" });
+    audit({ widgetId: widget.id, method: request.method, decision: "dispatched" });
 
     try {
       const result = await capability.handler(request.params);
@@ -141,6 +182,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   }
 
   function render(body: WidgetBody, container: HTMLElement): Widget {
+    const id = newWidgetId();
     const frame = document.createElement("iframe");
 
     // Deny-by-default: `sandbox` strips nearly every privilege, and each token
@@ -154,8 +196,13 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     // becomes the only way it can reach us.
     const channel = new MessageChannel();
 
+    // Created HERE, in the closure that owns the port. Everything downstream
+    // learns who is calling from the channel the message arrived on, never from
+    // the message itself — which is why a widget cannot impersonate another.
+    const widget: LiveWidget = { id, frame, port: channel.port1 };
+
     channel.port1.onmessage = (event: MessageEvent): void => {
-      void handleMessage(event.data).then((response) => {
+      void handleMessage(widget, event.data).then((response) => {
         if (response !== null) channel.port1.postMessage(response);
       });
     };
@@ -187,6 +234,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     container.appendChild(frame);
 
     return {
+      id,
       frame,
       destroy(): void {
         window.removeEventListener("message", onKnock);
