@@ -10,7 +10,7 @@
 // The `.js` extension is required even though these files are `.ts`:
 // TypeScript never rewrites import paths, and browsers demand the full path.
 import { SANDBOX_TOKENS, scaffold } from "./jail.js";
-import { fail, ok, parseRequest, RPC, type RpcResponse } from "./rpc.js";
+import { fail, ok, parseNotification, parseRequest, RPC, type RpcResponse } from "./rpc.js";
 
 /** Library version. Goes into audit entries, so a log line names the code that produced it. */
 export const VERSION = "0.0.0";
@@ -97,10 +97,37 @@ export interface AuditEvent {
   reason?: string;
 }
 
+/**
+ * A widget that is not working, so the host can say so instead of leaving a
+ * blank rectangle on the page.
+ */
+export interface WidgetFault {
+  widgetId: string;
+  /**
+   * `never-started` — the frame never completed its handshake. Broken scaffold,
+   * a widget that killed the stub, or a frame that navigated away on load.
+   * `script-error` — the widget's own code threw.
+   */
+  kind: "never-started" | "script-error";
+  /**
+   * ⚠️ For `script-error` this is **widget-authored text**, and it arrives in
+   * the host origin. Escape it, never assign it to innerHTML. The runtime
+   * clamps its length; it does not and cannot vouch for its content.
+   */
+  message: string;
+}
+
 export interface RuntimeOptions {
   capabilities: Capability[];
   /** Called for every inbound call, allowed or not. Must not throw. */
   onAudit?: (event: AuditEvent) => void;
+  /** Called when a widget fails to start or its code throws. Must not throw. */
+  onWidgetFault?: (fault: WidgetFault) => void;
+  /**
+   * How long to wait for a widget's handshake before declaring it dead.
+   * Default 10s.
+   */
+  startTimeoutMs?: number;
   /**
    * How long a capability call may run before the runtime gives up on it.
    * Default 30s. The handler's `signal` aborts at the same moment.
@@ -164,12 +191,46 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     }
   }
 
+  /** Longest widget-authored message we will carry across the wall. */
+  const MAX_FAULT_MESSAGE = 300;
+
+  function reportFault(widgetId: string, kind: WidgetFault["kind"], message: string): void {
+    const fault: WidgetFault = {
+      widgetId,
+      kind,
+      // Clamp here, host-side. The stub clamps too, but the stub is inside the
+      // jail and its cooperation cannot be assumed.
+      message: String(message).slice(0, MAX_FAULT_MESSAGE),
+    };
+    if (!options.onWidgetFault) {
+      console.warn(`[marzi] widget ${widgetId} ${kind}:`, fault.message);
+      return;
+    }
+    try {
+      options.onWidgetFault(fault);
+    } catch (error) {
+      console.error("[marzi] onWidgetFault threw:", error);
+    }
+  }
+
   /**
    * `widget` is supplied by the caller, which is the port's own message handler.
    * It is never read out of the message. That is the whole reason a widget
    * cannot impersonate another one: it has no field to lie in.
    */
   async function handleMessage(widget: LiveWidget, raw: unknown): Promise<RpcResponse | null> {
+    // Notifications come first: they carry no id, so they get no reply and can
+    // never reach a capability. Only one is understood, and an unknown one is
+    // dropped rather than answered.
+    const notification = parseNotification(raw);
+    if (notification !== null) {
+      if (notification.method === "marzi/fault") {
+        const params = notification.params as { message?: unknown } | null;
+        reportFault(widget.id, "script-error", String(params?.message ?? "unknown error"));
+      }
+      return null;
+    }
+
     const request = parseRequest(raw);
     if (request === null) {
       // Malformed and unidentifiable — there is no id to answer to, so the only
@@ -284,10 +345,20 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       // Answer once and stop listening. Never re-issue: a second port would be
       // a second, unaccounted-for line into the same jail.
       portIssued = true;
+      clearTimeout(startTimer);
       window.removeEventListener("message", onKnock);
       frame.contentWindow?.postMessage({ marzi: "port" }, "*", [channel.port2]);
     };
     window.addEventListener("message", onKnock);
+
+    // A frame that never knocks would otherwise leave this listener attached
+    // for the life of the page, and leave the host with a blank rectangle and
+    // no idea why. Give up after a while and say so.
+    const startTimer = setTimeout(() => {
+      if (portIssued) return;
+      window.removeEventListener("message", onKnock);
+      reportFault(id, "never-started", "widget did not complete its handshake");
+    }, options.startTimeoutMs ?? 10_000);
 
     // Attach last: the frame does not begin loading until it is in the
     // document, so everything above is in place before any widget code runs.
@@ -300,6 +371,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         // Abort first: any call still in flight gets its signal, so handlers
         // that honour it release their work instead of finishing into a void.
         widget.lifetime.abort(new DOMException("widget destroyed", "AbortError"));
+        clearTimeout(startTimer);
         window.removeEventListener("message", onKnock);
         channel.port1.onmessage = null;
         channel.port1.close();

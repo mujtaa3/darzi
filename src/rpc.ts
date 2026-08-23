@@ -26,6 +26,18 @@ export interface RpcResponse {
   error?: { code: number; message: string };
 }
 
+/**
+ * A notification: a method with **no id**, which therefore gets no reply.
+ *
+ * The widget uses these to tell the host something rather than ask for
+ * something — currently only that its own code threw.
+ */
+export interface RpcNotification {
+  jsonrpc: "2.0";
+  method: string;
+  params?: unknown;
+}
+
 /** Standard JSON-RPC error codes, plus our own reasons in the -320xx range. */
 export const RPC = {
   INVALID_REQUEST: -32600,
@@ -64,4 +76,24 @@ export function parseRequest(raw: unknown): RpcRequest | null {
   if (typeof method !== "string") return null;
 
   return { jsonrpc: "2.0", id, method, params: msg["params"] };
+}
+
+/**
+ * Validate an inbound notification. Returns null if it is not one.
+ *
+ * The absence of `id` is what makes it a notification, so a message carrying an
+ * id is a request and is rejected here. Rebuilt rather than cast, for the same
+ * reason as `parseRequest`.
+ */
+export function parseNotification(raw: unknown): RpcNotification | null {
+  if (typeof raw !== "object" || raw === null) return null;
+
+  const msg = raw as Record<string, unknown>;
+  if (msg["jsonrpc"] !== "2.0") return null;
+  if ("id" in msg) return null;
+
+  const method = msg["method"];
+  if (typeof method !== "string") return null;
+
+  return { jsonrpc: "2.0", method, params: msg["params"] };
 }

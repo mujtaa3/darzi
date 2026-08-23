@@ -42,6 +42,27 @@ export const FRAME_STUB = `
     }
   };
 
+  // Tell the host when the widget's own code throws, so it can show something
+  // useful instead of a blank box. A notification: no id, no reply expected.
+  // The host clamps and escapes this — it is widget-authored text.
+  window.addEventListener("error", function (event) {
+    var where = event.lineno ? " (line " + event.lineno + ")" : "";
+    transmit({
+      jsonrpc: "2.0",
+      method: "marzi/fault",
+      params: { message: String(event.message || "script error").slice(0, 300) + where }
+    });
+  });
+
+  window.addEventListener("unhandledrejection", function (event) {
+    var reason = event.reason && event.reason.message ? event.reason.message : event.reason;
+    transmit({
+      jsonrpc: "2.0",
+      method: "marzi/fault",
+      params: { message: "unhandled rejection: " + String(reason).slice(0, 300) }
+    });
+  });
+
   // Listen BEFORE announcing ourselves, so we cannot miss the reply.
   window.addEventListener("message", function (event) {
     if (port) { return; }                     // accept exactly one port, ever
