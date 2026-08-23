@@ -31,6 +31,8 @@ export const RPC = {
   INVALID_REQUEST: -32600,
   METHOD_NOT_FOUND: -32601,
   INTERNAL_ERROR: -32603,
+  /** -32000..-32099 is reserved by JSON-RPC for implementation-defined errors. */
+  TIMEOUT: -32001,
 } as const;
 
 export function ok(id: RpcId, result: unknown): RpcResponse {
