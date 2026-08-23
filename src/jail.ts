@@ -40,7 +40,32 @@ export const WIDGET_CSP = [
   "img-src data:", // inline images only — a remote <img> would be a beacon
   "font-src data:",
   "form-action 'none'", // submitting a form is a navigation, i.e. an exfil channel
+  // WebRTC has its own network path — it resolves and contacts the STUN server
+  // you name, which is a channel `connect-src` never covered. Hence a directive
+  // of its own. Chrome honours it; Firefox and Safari do not yet, so on those
+  // engines this remains an open hole, documented in the threat model.
+  "webrtc 'block'",
 ].join("; ");
+
+/**
+ * Powerful device features the frame may request. Empty means none of them.
+ *
+ * A third mechanism, independent of sandbox and CSP: Permissions Policy governs
+ * camera, microphone, geolocation, sensors, payment and friends. Without this a
+ * widget could trigger a browser permission prompt that appears to come from
+ * the host app — a phishing surface whether the user accepts or declines.
+ */
+export const FRAME_ALLOW = "";
+
+/**
+ * Keep the host's URL out of anything the frame causes.
+ *
+ * A navigation normally carries a `Referer` naming the page it came from, and
+ * app URLs routinely contain ids and tokens. Since a widget CAN navigate itself
+ * away (demonstrated in demo/self-nav.html), this stops that navigation also
+ * handing over where it came from.
+ */
+export const FRAME_REFERRER_POLICY = "no-referrer";
 
 /**
  * Wrap the model's HTML in a document whose head we control.

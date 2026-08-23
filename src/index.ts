@@ -9,7 +9,7 @@
 
 // The `.js` extension is required even though these files are `.ts`:
 // TypeScript never rewrites import paths, and browsers demand the full path.
-import { SANDBOX_TOKENS, scaffold } from "./jail.js";
+import { FRAME_ALLOW, FRAME_REFERRER_POLICY, SANDBOX_TOKENS, scaffold } from "./jail.js";
 import { fail, ok, parseNotification, parseRequest, RPC, type RpcResponse } from "./rpc.js";
 
 /** Library version. Goes into audit entries, so a log line names the code that produced it. */
@@ -311,6 +311,13 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     // JavaScript is useless. Withholding `allow-same-origin` is what makes the
     // frame a nobody — see jail.ts.
     frame.setAttribute("sandbox", SANDBOX_TOKENS);
+
+    // Two further mechanisms, each governing an axis the sandbox does not:
+    // Permissions Policy (device features) and referrer policy (what the frame
+    // discloses about us when it causes a request). See jail.ts.
+    frame.setAttribute("allow", FRAME_ALLOW);
+    frame.setAttribute("referrerpolicy", FRAME_REFERRER_POLICY);
+
     frame.srcdoc = scaffold(body);
 
     // The private line. port1 stays here; port2 is handed to the widget and
