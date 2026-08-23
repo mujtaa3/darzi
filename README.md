@@ -76,7 +76,6 @@ a page cannot be trusted to report on itself.
 | `src/rpc.ts` | JSON-RPC types and the inbound validator |
 | `src/frame-stub.ts` | the in-frame helper — **untrusted**, ergonomics only |
 | `prompts/` | the prompt template shipped for widget authors |
-| `learnings/` | measured browser behaviour and threat findings |
 
 Zero runtime dependencies. TypeScript is a devDependency; so is the Anthropic SDK,
 which only the demo server uses.

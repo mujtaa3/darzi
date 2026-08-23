@@ -5,4 +5,5 @@ dist/
 
 # Kept local for now (working notes / agent instructions), not part of the repo
 docs/
+learnings/
 CLAUDE.md
