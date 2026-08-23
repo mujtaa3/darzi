@@ -18,8 +18,15 @@ export const FRAME_STUB = `
 (function () {
   var port = null;      // our end of the private line, once it arrives
   var queue = [];       // messages sent before the line was connected
-  var pending = {};     // id -> { resolve, reject } for calls awaiting a reply
+  var pending = {};     // id -> { resolve, reject, timer } for calls awaiting a reply
   var nextId = 1;
+
+  // Last resort only. The host answers its own timeouts with a JSON-RPC error,
+  // so this fires solely when NO answer arrives at all — the widget was
+  // destroyed mid-call, or the port never connected. Deliberately generous, so
+  // the host's own (configurable, 30s by default) deadline always wins first;
+  // a stub that gave up earlier would report a timeout the host never saw.
+  var NO_ANSWER_MS = 60000;
 
   function transmit(message) {
     if (port) { port.postMessage(message); } else { queue.push(message); }
@@ -36,7 +43,12 @@ export const FRAME_STUB = `
     call: function (method, params) {
       return new Promise(function (resolve, reject) {
         var id = nextId++;
-        pending[id] = { resolve: resolve, reject: reject };
+        var timer = setTimeout(function () {
+          if (!pending[id]) { return; }
+          delete pending[id];
+          reject(new Error("no answer from the host"));
+        }, NO_ANSWER_MS);
+        pending[id] = { resolve: resolve, reject: reject, timer: timer };
         transmit({ jsonrpc: "2.0", id: id, method: method, params: params });
       });
     }
@@ -81,6 +93,7 @@ export const FRAME_STUB = `
       var waiting = pending[msg.id];
       if (!waiting) { return; }
       delete pending[msg.id];
+      clearTimeout(waiting.timer);
 
       if (msg.error) {
         waiting.reject(new Error(msg.error.message || "call failed"));
