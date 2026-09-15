@@ -97,3 +97,108 @@ export function parseNotification(raw: unknown): RpcNotification | null {
 
   return { jsonrpc: "2.0", method, params: msg["params"] };
 }
+
+/**
+ * Keys that rewrite an object's prototype chain instead of storing data.
+ *
+ * `structuredClone` delivers an own property literally named `__proto__`
+ * across the port intact (measured). marzi itself never merges params, so the
+ * runtime is not vulnerable — but a handler that recursively merges them
+ * (lodash.merge, a hand-rolled config merger) would write through that key
+ * into `Object.prototype`: the one hidden object every plain object in the
+ * page consults for properties it doesn't have. One poisoned call would change
+ * the behaviour of every object in the app. Handlers are app-developer code,
+ * so the lever is removed here at the boundary rather than trusting every
+ * downstream call site to know about a JavaScript-only hazard.
+ */
+const PROTOTYPE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+/**
+ * Shape bounds for inbound params. They protect three things at once: this
+ * module's own recursion (stack depth), handlers (a 50MB blob of nested junk
+ * is perfectly legal structured-clone), and whatever later logs or stores the
+ * params.
+ */
+const MAX_PARAM_DEPTH = 32;
+const MAX_PARAM_NODES = 10_000;
+/** Total budget in characters/bytes across all strings, keys, and binary. */
+const MAX_PARAM_TEXT = 1_000_000;
+
+export type SanitizeResult =
+  | { ok: true; value: unknown }
+  | { ok: false; reason: string };
+
+/**
+ * Rebuild an inbound value: drop prototype-rewriting keys, enforce shape
+ * bounds, never mutate the widget's object.
+ *
+ * Plain objects and arrays are rebuilt. A short allowlist of clonable types
+ * that cannot smuggle a prototype lever (Date, RegExp, binary) passes through,
+ * with binary sizes charged against the text budget so an ArrayBuffer cannot
+ * be the byte bomb a string is not allowed to be. Anything else — Map, Set,
+ * Error, whatever the platform adds next — is refused rather than guessed at:
+ * params are JSON-shaped data plus dates and binary, and a widget that needs
+ * more can encode it.
+ *
+ * Rebuilt objects keep their normal prototype. A null prototype would also
+ * break `params.hasOwnProperty(...)` in handler code, and buys nothing extra
+ * once the dangerous keys are gone.
+ */
+export function sanitizeParams(input: unknown): SanitizeResult {
+  let nodes = 0;
+  let text = 0;
+
+  const budget = (amount: number): void => {
+    text += amount;
+    if (text > MAX_PARAM_TEXT) throw new RangeError("too much data");
+  };
+
+  function walk(value: unknown, depth: number): unknown {
+    if (depth > MAX_PARAM_DEPTH) throw new RangeError("nested too deeply");
+    if (++nodes > MAX_PARAM_NODES) throw new RangeError("too many values");
+
+    if (typeof value === "string") {
+      budget(value.length);
+      return value;
+    }
+    if (value === null || typeof value !== "object") return value;
+
+    if (Array.isArray(value)) {
+      // Rebuilding by index also sheds any smuggled non-index properties.
+      return value.map((item) => walk(item, depth + 1));
+    }
+
+    const proto = Object.getPrototypeOf(value);
+    if (proto === Object.prototype || proto === null) {
+      const clean: Record<string, unknown> = {};
+      for (const key of Object.getOwnPropertyNames(value)) {
+        if (PROTOTYPE_KEYS.has(key)) continue;
+        budget(key.length);
+        clean[key] = walk((value as Record<string, unknown>)[key], depth + 1);
+      }
+      return clean;
+    }
+
+    if (value instanceof Date || value instanceof RegExp) return value;
+    if (value instanceof ArrayBuffer) {
+      budget(value.byteLength);
+      return value;
+    }
+    if (ArrayBuffer.isView(value)) {
+      budget(value.byteLength);
+      return value;
+    }
+    if (typeof Blob !== "undefined" && value instanceof Blob) {
+      budget(value.size);
+      return value;
+    }
+
+    throw new RangeError("unsupported value type");
+  }
+
+  try {
+    return { ok: true, value: walk(input, 0) };
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : "invalid params" };
+  }
+}

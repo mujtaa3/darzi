@@ -10,7 +10,15 @@
 // The `.js` extension is required even though these files are `.ts`:
 // TypeScript never rewrites import paths, and browsers demand the full path.
 import { FRAME_ALLOW, FRAME_REFERRER_POLICY, SANDBOX_TOKENS, scaffold } from "./jail.js";
-import { fail, ok, parseNotification, parseRequest, RPC, type RpcResponse } from "./rpc.js";
+import {
+  fail,
+  ok,
+  parseNotification,
+  parseRequest,
+  RPC,
+  sanitizeParams,
+  type RpcResponse,
+} from "./rpc.js";
 
 /** Library version. Goes into audit entries, so a log line names the code that produced it. */
 export const VERSION = "0.0.0";
@@ -256,6 +264,23 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       return fail(request.id, RPC.METHOD_NOT_FOUND, `no such capability: ${request.method}`);
     }
 
+    // Params cross the trust boundary here. sanitizeParams rebuilds them,
+    // dropping the prototype-rewriting keys (__proto__, constructor,
+    // prototype) and bounding depth, node count and total size — see rpc.ts
+    // for the full reasoning. Whatever a handler does with params afterwards,
+    // the pollution lever is already gone.
+    const params = sanitizeParams(request.params);
+    if (!params.ok) {
+      audit({
+        widgetId: widget.id,
+        method: request.method,
+        decision: "refused",
+        reason: `params rejected: ${params.reason}`,
+      });
+      // The reason is about the widget's own message, so it is safe to return.
+      return fail(request.id, RPC.INVALID_REQUEST, `params rejected: ${params.reason}`);
+    }
+
     audit({ widgetId: widget.id, method: request.method, decision: "dispatched" });
 
     // Two independent protections, because they cover different failures:
@@ -276,7 +301,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
 
     try {
       const outcome = await Promise.race([
-        Promise.resolve(capability.handler(request.params, { signal })),
+        Promise.resolve(capability.handler(params.value, { signal })),
         new Promise<typeof ABANDONED>((resolve) => {
           signal.addEventListener("abort", () => resolve(ABANDONED), { once: true });
         }),
