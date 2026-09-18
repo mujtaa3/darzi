@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ledger — my widgets</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main>
+  <p class="sub" style="margin-top:0">Describe a widget over your own money.
+  A model writes it; marzi runs it in the jail with no network, talking to
+  Ledger only through the capabilities below.</p>
+
+  <div class="ask">
+    <input id="request" placeholder="e.g. how has my spending changed month over month this year?"
+           value="how has my spending changed month over month this year?">
+    <button id="go">Generate</button>
+  </div>
+  <div class="examples" id="examples"></div>
+  <p id="status" class="status"></p>
+
+  <div class="slot" id="slot"></div>
+
+  <div class="grid2" style="margin-top:1.2rem">
+    <div>
+      <h2 style="margin-top:0">What it may call</h2>
+      <div class="panel">
+        <ul class="caplist" id="catalog">Loading…</ul>
+        <p class="sub" style="margin-bottom:0">⚠ No grants yet — today every widget
+        can call all of these, <b>writes included</b>. Rung 5 fixes that; the
+        log on the right is the evidence for why it must.</p>
+      </div>
+    </div>
+    <div>
+      <h2 style="margin-top:0">Switchboard log</h2>
+      <div class="auditlog" id="audit">—</div>
+    </div>
+  </div>
+
+  <h2>Compliance checks</h2>
+  <p class="sub">Static checks against the prompt template's rules. A failure
+  means the template or runtime needs work — not that the model is bad.</p>
+  <ul class="checks" id="checks"><li>—</li></ul>
+
+  <details>
+    <summary>What the model actually wrote</summary>
+    <pre id="source">—</pre>
+  </details>
+</main>
+
+<script type="module">
+  import { createRuntime } from "../dist/index.js";
+  import { nav, api, esc } from "./shared.js";
+  import { buildCapabilities } from "./capabilities.js";
+  nav("widgets");
+
+  const $ = (id) => document.getElementById(id);
+  const statusEl = $("status");
+
+  const catalog = await api("/api/catalog");
+  const GRANTED = catalog.map((c) => c.name);
+
+  $("catalog").innerHTML = catalog.map((c) =>
+    `<li><span class="kind ${c.kind}">${c.kind}</span><code>${esc(c.name)}</code></li>`
+  ).join("");
+
+  // ── The switchboard's decisions, live ─────────────────────────────────────
+  const auditLines = [];
+  function logAudit(line, cls) {
+    auditLines.push(`<div class="${cls}">${esc(line)}</div>`);
+    if (auditLines.length > 200) auditLines.shift();
+    $("audit").innerHTML = auditLines.join("");
+    $("audit").scrollTop = $("audit").scrollHeight;
+  }
+
+  const runtime = createRuntime({
+    capabilities: buildCapabilities(catalog),
+    onAudit: (e) => logAudit(
+      `${e.method} — ${e.decision}${e.reason ? ` (${e.reason})` : ""}`,
+      e.decision === "dispatched" ? "ok" : "no",
+    ),
+    onWidgetFault: (f) => {
+      logAudit(`widget ${f.kind}: ${f.message}`, "fault");
+      statusEl.textContent = f.kind === "never-started"
+        ? "widget never started — see the log" : "widget hit a script error — see the log";
+    },
+  });
+
+  // ── Static compliance checks (same rules as the prompt template) ──────────
+  function checkCompliance(html, declared) {
+    const called = [...html.matchAll(/marzi\.call\(\s*["'`]([^"'`]+)["'`]/g)].map((m) => m[1]);
+    const unique = [...new Set(called)];
+    return [
+      { ok: !/<script[^>]*\ssrc=/i.test(html), label: "no external <script src>" },
+      { ok: !/<link[^>]*stylesheet/i.test(html), label: "no external stylesheet" },
+      { ok: !/@import\s+url|fonts\.googleapis/i.test(html), label: "no remote fonts" },
+      { ok: !/<img[^>]*\ssrc=["']https?:/i.test(html), label: "no remote images" },
+      { ok: !/\bfetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon/.test(html), label: "no network calls" },
+      { ok: !/localStorage|sessionStorage|document\.cookie/.test(html), label: "no storage or cookies" },
+      { ok: !/\balert\s*\(|\bconfirm\s*\(|\bprompt\s*\(/.test(html), label: "no modal dialogs" },
+      { ok: !/<!doctype|<html[\s>]|<head[\s>]|<body[\s>]/i.test(html), label: "fragment, not a full document" },
+      { ok: !/marzi\.call\(/.test(html) ||
+            /\.catch\s*\(/.test(html) ||
+            /\.then\s*\([\s\S]{0,400}?\}\s*,\s*function/.test(html),
+        label: "handles a rejected call" },
+      { ok: unique.every((c) => GRANTED.includes(c)),
+        label: `calls only real capabilities (${unique.join(", ") || "none"})` },
+      { ok: declared.length === unique.length && declared.every((d) => unique.includes(d)),
+        label: `declared capabilities match calls (declared: ${declared.join(", ") || "none"})` },
+    ];
+  }
+
+  let live = null; // the currently rendered widget, so regeneration tears it down
+  function show(widget) {
+    if (live) live.destroy();
+    $("slot").innerHTML = "";
+    live = runtime.render(widget.html, $("slot"));
+    logAudit(`rendered "${widget.title}" as ${live.id.slice(0, 8)}…`, "ok");
+
+    const results = checkCompliance(widget.html, widget.capabilities);
+    $("checks").innerHTML = results
+      .map((r) => `<li class="${r.ok ? "pass" : "fail"}">${esc(r.label)}</li>`)
+      .join("");
+    $("source").textContent = widget.html;
+
+    const failures = results.filter((r) => !r.ok).length;
+    statusEl.textContent = failures
+      ? `generated — ${failures} compliance issue${failures > 1 ? "s" : ""}`
+      : "generated — all checks passed";
+  }
+
+  async function generate(request) {
+    $("go").disabled = true;
+    statusEl.textContent = "asking the model… (typically 30–60s)";
+    $("checks").innerHTML = "<li>—</li>";
+    try {
+      show(await api("/api/generate", { request }));
+    } catch (err) {
+      statusEl.textContent = "";
+      $("slot").innerHTML = `<div class="err">${esc(err.message)}</div>`;
+    } finally {
+      $("go").disabled = false;
+    }
+  }
+
+  $("go").onclick = () => generate($("request").value);
+  $("request").onkeydown = (e) => { if (e.key === "Enter") $("go").click(); };
+
+  // Reads, a write, a refine-ish ask, and one that needs what we don't have.
+  const EXAMPLES = [
+    "how has my spending changed month over month this year?",
+    "which subscriptions got more expensive, and when?",
+    "find suspicious transactions: duplicates, fees, anything unusual",
+    "let me set budgets for my top 5 categories right from the widget",
+    "a table of September spending where I can fix wrong categories inline",
+    "what will my checking balance be at the end of the year?",
+  ];
+  $("examples").innerHTML = EXAMPLES.map(
+    (e) => `<button data-q="${esc(e)}">${esc(e)}</button>`,
+  ).join("");
+  $("examples").onclick = (e) => {
+    if (e.target.dataset.q) { $("request").value = e.target.dataset.q; $("go").click(); }
+  };
+</script>
+</body>
+</html>
