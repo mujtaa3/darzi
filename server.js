@@ -173,13 +173,27 @@ const server = createServer(async (req, res) => {
     }
   }
 
+  // The front door REDIRECTS rather than serving the app page at "/". Serving
+  // content at a path it doesn't live at breaks relative URL resolution: the
+  // page's ./style.css would resolve against "/", land outside the servable
+  // directories, and 403 — an unstyled skeleton. (Found the hard way.)
+  if (url.pathname === "/") {
+    res.writeHead(302, { Location: "/app/" }).end();
+    return;
+  }
+  // Browsers ask for this uninvited; answer quietly instead of 403-ing.
+  if (url.pathname === "/favicon.ico") {
+    res.writeHead(204).end();
+    return;
+  }
+
   // Static files. Two defences, because this process holds an API key:
   //   1. `normalize` + a prefix check stop "../.." escaping the repo entirely.
   //   2. An allowlist of servable directories — the rest of the repo (source,
   //      node_modules, git config) is not the demo's to hand out.
   // Path traversal is the same bug our HTTP capability adapter will have to
   // defend against, so we may as well get it right here.
-  let requested = url.pathname === "/" ? "/app/index.html" : url.pathname;
+  let requested = url.pathname;
   if (requested.endsWith("/")) requested += "index.html"; // directory index
   const filePath = join(ROOT, normalize(requested));
 
@@ -193,8 +207,10 @@ const server = createServer(async (req, res) => {
     const content = await readFile(filePath);
     res.writeHead(200, { "Content-Type": MIME[extname(filePath)] ?? "application/octet-stream" });
     res.end(content);
+    console.log(`  200 ${url.pathname}`);
   } catch {
     res.writeHead(404).end("not found");
+    console.log(`  404 ${url.pathname}`);
   }
 });
 
