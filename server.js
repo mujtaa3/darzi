@@ -1,5 +1,5 @@
 /**
- * The demo app's backend.
+ * The backend for the finance app (and the older demos).
  *
  * This exists for one reason: **the API key must never reach the browser.**
  * marzi's own rule is that secrets stay on the host page or its backend, and a
@@ -8,19 +8,21 @@
  * their own backend and hands marzi the result.
  *
  * marzi itself remains a pure frontend library. This server is the *app*.
+ * The finance endpoints (transactions, budgets, notes) live in app/api.js;
+ * this file handles generation and static files.
  *
  *   export ANTHROPIC_API_KEY=sk-ant-...
- *   node demo/server.js
- *   open http://127.0.0.1:8000/demo/studio.html
+ *   node server.js
+ *   open http://127.0.0.1:8000/
  */
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
+import { catalog, handleFinanceApi } from "./app/api.js";
 
-const HERE = fileURLToPath(new URL(".", import.meta.url));
-const ROOT = resolve(HERE, "..");
+const ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const PORT = Number(process.env.PORT) || 8000;
 
 const MIME = {
@@ -32,27 +34,11 @@ const MIME = {
   ".map": "application/json; charset=utf-8",
 };
 
-/**
- * The capability catalog, as described to the model.
- *
- * Descriptions are documentation only — they carry zero enforcement weight.
- * What a capability may actually do is decided by the handler registered in the
- * page, and (from rung 5) by that widget's grants.
- */
-const CATALOG = [
-  {
-    name: "transactions.list",
-    description:
-      "The signed-in user's bank and card transactions.\n" +
-      "  params: { month: string }  — 'YYYY-MM', e.g. '2026-08'\n" +
-      "  returns: array of { date, merchant, category, account, amount }\n" +
-      "           amount is a number: negative for spending, positive for income.\n" +
-      "  Available months: 2026-07 and 2026-08.",
-  },
-];
-
+// The capability catalog now belongs to the finance app (app/api.js) — its
+// descriptions embed the real month range of the loaded data, so they are
+// computed rather than pasted here.
 function catalogForPrompt() {
-  return CATALOG.map((c) => `- \`${c.name}\`\n  ${c.description}`).join("\n\n");
+  return catalog().map((c) => `- \`${c.name}\`\n  ${c.description}`).join("\n\n");
 }
 
 /** Pull the three blocks out of the model's reply. */
@@ -165,8 +151,26 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === "/api/catalog") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(CATALOG));
+    res.end(JSON.stringify(catalog()));
     return;
+  }
+
+  // The finance app's data endpoints. Everything under /api/ that isn't
+  // generation belongs to it.
+  if (url.pathname.startsWith("/api/")) {
+    try {
+      const body = req.method === "GET" ? null : JSON.parse((await readBody(req)) || "null");
+      const handled = await handleFinanceApi(url, req.method, body);
+      if (handled !== null) {
+        res.writeHead(handled.status, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(handled.body));
+        return;
+      }
+    } catch (error) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: error.message }));
+      return;
+    }
   }
 
   // Static files. Two defences, because this process holds an API key:
@@ -175,11 +179,11 @@ const server = createServer(async (req, res) => {
   //      node_modules, git config) is not the demo's to hand out.
   // Path traversal is the same bug our HTTP capability adapter will have to
   // defend against, so we may as well get it right here.
-  let requested = url.pathname === "/" ? "/demo/studio.html" : url.pathname;
+  let requested = url.pathname === "/" ? "/app/index.html" : url.pathname;
   if (requested.endsWith("/")) requested += "index.html"; // directory index
   const filePath = join(ROOT, normalize(requested));
 
-  const SERVABLE = [join(ROOT, "demo"), join(ROOT, "dist")];
+  const SERVABLE = [join(ROOT, "demo"), join(ROOT, "dist"), join(ROOT, "app")];
   if (!SERVABLE.some((dir) => filePath.startsWith(dir + "/"))) {
     res.writeHead(403).end("forbidden");
     return;
@@ -199,7 +203,7 @@ server.on("error", (error) => {
     console.error(
       `\nPort ${PORT} is already in use — something else is still listening.\n` +
         `Free it with:   lsof -ti:${PORT} | xargs kill\n` +
-        `Or run on another port:   PORT=8001 node demo/server.js\n`,
+        `Or run on another port:   PORT=8001 node server.js\n`,
     );
     process.exit(1);
   }
@@ -207,7 +211,8 @@ server.on("error", (error) => {
 });
 
 server.listen(PORT, "127.0.0.1", () => {
-  console.log(`marzi demo → http://127.0.0.1:${PORT}/demo/studio.html`);
+  console.log(`marzi finance app → http://127.0.0.1:${PORT}/`);
+  console.log(`older demos       → http://127.0.0.1:${PORT}/demo/studio.html`);
   if (!process.env.ANTHROPIC_API_KEY) {
     console.log("⚠  ANTHROPIC_API_KEY is not set — generation will fail until it is.");
   }

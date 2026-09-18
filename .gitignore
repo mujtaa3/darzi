@@ -3,6 +3,9 @@ dist/
 *.tsbuildinfo
 .DS_Store
 
+# Your local finance state (budgets, notes, recategorizations) — not the repo's
+app/data.local.json
+
 # Kept local for now (working notes / agent instructions), not part of the repo
 docs/
 learnings/
