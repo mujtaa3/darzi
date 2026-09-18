@@ -45,6 +45,7 @@ export const RPC = {
   INTERNAL_ERROR: -32603,
   /** -32000..-32099 is reserved by JSON-RPC for implementation-defined errors. */
   TIMEOUT: -32001,
+  RATE_LIMITED: -32002,
 } as const;
 
 export function ok(id: RpcId, result: unknown): RpcResponse {
@@ -96,6 +97,38 @@ export function parseNotification(raw: unknown): RpcNotification | null {
   if (typeof method !== "string") return null;
 
   return { jsonrpc: "2.0", method, params: msg["params"] };
+}
+
+/** Mutable counter state for one widget's flood window. */
+export interface RateWindow {
+  start: number;
+  count: number;
+}
+
+/**
+ * Fixed-window flood check. Returns true if this message is within budget.
+ *
+ * Mutates `w`. Lives here, away from the DOM, so it can be exercised directly
+ * in a test runner — the browser harness has proven unreliable for anything
+ * timing-dependent, and this is the kind of logic that must not be trusted to
+ * eyeballing.
+ *
+ * Fixed windows, not a token bucket: a burst straddling a boundary can briefly
+ * reach 2× the nominal rate. That is acceptable for flood control (the point is
+ * bounding sustained cost) and would not be for billing.
+ */
+export function withinRate(w: RateWindow, now: number, calls: number, windowMs: number): boolean {
+  if (now - w.start >= windowMs) {
+    w.start = now;
+    w.count = 0;
+  }
+  w.count += 1;
+  return w.count <= calls;
+}
+
+/** True exactly once per window, on the message that crosses the limit. */
+export function justCrossedRate(w: RateWindow, calls: number): boolean {
+  return w.count === calls + 1;
 }
 
 /**

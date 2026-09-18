@@ -12,11 +12,14 @@
 import { FRAME_ALLOW, FRAME_REFERRER_POLICY, SANDBOX_TOKENS, scaffold } from "./jail.js";
 import {
   fail,
+  justCrossedRate,
   ok,
   parseNotification,
   parseRequest,
   RPC,
   sanitizeParams,
+  withinRate,
+  type RateWindow,
   type RpcResponse,
 } from "./rpc.js";
 
@@ -137,6 +140,14 @@ export interface RuntimeOptions {
    */
   startTimeoutMs?: number;
   /**
+   * Ceiling on inbound messages per widget: at most `calls` in any window of
+   * `windowMs`. Counts EVERY message — requests, notifications, junk — since a
+   * widget can flood with any of them. Fixed windows, so a burst straddling a
+   * boundary can briefly reach 2×: fine for flood control, not for billing.
+   * Default 120 per 10 seconds.
+   */
+  rateLimit?: { calls: number; windowMs: number };
+  /**
    * How long a capability call may run before the runtime gives up on it.
    * Default 30s. The handler's `signal` aborts at the same moment.
    */
@@ -155,6 +166,8 @@ interface LiveWidget {
   port: MessagePort;
   /** Aborted on teardown, so calls still in flight are cancelled with it. */
   lifetime: AbortController;
+  /** Fixed-window flood counter — see RuntimeOptions.rateLimit. */
+  rate: RateWindow;
 }
 
 /** Distinguishes "the runtime gave up" from a value a handler actually returned. */
@@ -221,12 +234,34 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     }
   }
 
+  const rateLimit = options.rateLimit ?? { calls: 120, windowMs: 10_000 };
+
   /**
    * `widget` is supplied by the caller, which is the port's own message handler.
    * It is never read out of the message. That is the whole reason a widget
    * cannot impersonate another one: it has no field to lie in.
    */
   async function handleMessage(widget: LiveWidget, raw: unknown): Promise<RpcResponse | null> {
+    // Flood control before any other work, for EVERY message — a widget can
+    // spam notifications and junk as easily as requests, and whatever runs
+    // before this line is amplification the attacker gets for free.
+    if (!withinRate(widget.rate, Date.now(), rateLimit.calls, rateLimit.windowMs)) {
+      // Audit the transition once per window, not once per flooded message —
+      // otherwise the flood would simply be forwarded into the audit sink.
+      if (justCrossedRate(widget.rate, rateLimit.calls)) {
+        audit({
+          widgetId: widget.id,
+          method: "(rate limit)",
+          decision: "refused",
+          reason: `over ${rateLimit.calls} messages in ${rateLimit.windowMs}ms`,
+        });
+      }
+      // Requests get an error so their promises reject promptly; anything else
+      // is dropped — the fault channel is best-effort by design.
+      const flooded = parseRequest(raw);
+      return flooded ? fail(flooded.id, RPC.RATE_LIMITED, "rate limited") : null;
+    }
+
     // Notifications come first: they carry no id, so they get no reply and can
     // never reach a capability. Only one is understood, and an unknown one is
     // dropped rather than answered.
@@ -352,7 +387,13 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     // Created HERE, in the closure that owns the port. Everything downstream
     // learns who is calling from the channel the message arrived on, never from
     // the message itself — which is why a widget cannot impersonate another.
-    const widget: LiveWidget = { id, frame, port: channel.port1, lifetime: new AbortController() };
+    const widget: LiveWidget = {
+      id,
+      frame,
+      port: channel.port1,
+      lifetime: new AbortController(),
+      rate: { start: 0, count: 0 },
+    };
 
     channel.port1.onmessage = (event: MessageEvent): void => {
       void handleMessage(widget, event.data).then((response) => {
