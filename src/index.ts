@@ -20,8 +20,19 @@ import {
   sanitizeParams,
   withinRate,
   type RateWindow,
+  type RpcId,
   type RpcResponse,
 } from "./rpc.js";
+import type { StateStore } from "./store.js";
+
+export type {
+  StateStore,
+  WidgetRecord,
+  WidgetStore,
+  WidgetSummary,
+  WidgetVersion,
+} from "./store.js";
+export { memoryStore } from "./store.js";
 
 /** Library version. Goes into audit entries, so a log line names the code that produced it. */
 export const VERSION = "0.0.0";
@@ -104,6 +115,13 @@ export interface RenderOptions {
    * here beats a widget dying inside the jail on an undefined global.
    */
   libs?: string[];
+  /**
+   * The widget's DURABLE identity — the id of its saved record. State saved
+   * via `marzi.saveState` is namespaced by this, so rendering a saved widget
+   * with its record id is what makes its state come back tomorrow. Omitted:
+   * a fresh id is minted and the widget is ephemeral.
+   */
+  id?: string;
 }
 
 /** A rendered widget: its identity, its frame, and how to tear it down. */
@@ -162,6 +180,18 @@ export interface RuntimeOptions {
   capabilities: Capability[];
   /** Vendored libraries widgets may request by name at render. */
   libraries?: Library[];
+  /**
+   * Where `marzi.saveState` / `marzi.loadState` land. Without one, those
+   * calls are refused. The runtime hands this an opaque JSON string keyed by
+   * widget id — it never asks the store to interpret state.
+   */
+  store?: StateStore;
+  /**
+   * Ceiling on one widget's serialized state, in JSON characters.
+   * Default 64 000. State is widget-authored and therefore hostile; the cap
+   * is what stops a widget using the host's storage as a landfill.
+   */
+  stateLimitBytes?: number;
   /** Called for every inbound call, allowed or not. Must not throw. */
   onAudit?: (event: AuditEvent) => void;
   /** Called when a widget fails to start or its code throws. Must not throw. */
@@ -224,6 +254,12 @@ function newWidgetId(): string {
 export function createRuntime(options: RuntimeOptions): Runtime {
   const registry = new Map<string, Capability>();
   for (const capability of options.capabilities) {
+    // "marzi/" names are runtime built-ins (marzi/fault, marzi/saveState…).
+    // Letting an app register one would let it shadow or spoof the runtime's
+    // own protocol, so the collision is refused at setup, loudly.
+    if (capability.name.startsWith("marzi/")) {
+      throw new Error(`capability name "${capability.name}" uses the reserved "marzi/" prefix`);
+    }
     registry.set(capability.name, capability);
   }
 
@@ -272,6 +308,60 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   }
 
   const rateLimit = options.rateLimit ?? { calls: 120, windowMs: 10_000 };
+  const stateLimit = options.stateLimitBytes ?? 64_000;
+
+  /**
+   * The widget's own settings, through the switchboard.
+   *
+   * State is widget-authored, so it crosses the trust boundary like params do:
+   * sanitized (prototype keys stripped, shape bounded), then serialized ONCE
+   * here — the store receives an opaque JSON string, and load parses it back.
+   * JSON.stringify also throws on cycles, which lands in the refusal path.
+   */
+  async function handleState(
+    widget: LiveWidget,
+    id: RpcId,
+    method: string,
+    rawParams: unknown,
+  ): Promise<RpcResponse> {
+    const refuse = (reason: string): RpcResponse => {
+      audit({ widgetId: widget.id, method, decision: "refused", reason });
+      return fail(id, RPC.INVALID_REQUEST, reason);
+    };
+
+    if (!options.store) return refuse("no store configured");
+
+    try {
+      if (method === "marzi/loadState") {
+        audit({ widgetId: widget.id, method, decision: "dispatched" });
+        const json = await options.store.getState(widget.id);
+        return ok(id, json === null ? null : JSON.parse(json));
+      }
+
+      const params = sanitizeParams(rawParams);
+      if (!params.ok) return refuse(`state rejected: ${params.reason}`);
+      const value = (params.value as { value?: unknown } | null)?.value ?? null;
+
+      let json: string;
+      try {
+        json = JSON.stringify(value) ?? "null";
+      } catch {
+        return refuse("state rejected: not JSON-serializable");
+      }
+      if (json.length > stateLimit) {
+        return refuse(`state too large (${json.length} > ${stateLimit})`);
+      }
+
+      audit({ widgetId: widget.id, method, decision: "dispatched" });
+      await options.store.putState(widget.id, json);
+      return ok(id, true);
+    } catch (error) {
+      // Same posture as capability handlers: the real error is the host's to
+      // see, never the widget's — messages can carry internal detail.
+      console.error(`[marzi] ${method} failed:`, error);
+      return fail(id, RPC.INTERNAL_ERROR, "state operation failed");
+    }
+  }
 
   /**
    * `widget` is supplied by the caller, which is the port's own message handler.
@@ -323,6 +413,15 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         reason: "malformed message",
       });
       return null;
+    }
+
+    // Built-ins before the registry: these are runtime protocol, not app
+    // capabilities, and (note for rung 5) they are runtime-governed — grants
+    // will apply to the capability registry only. The widget id used for
+    // namespacing comes from the port's closure, never from the message, so
+    // one widget cannot read or write another widget's state.
+    if (request.method === "marzi/saveState" || request.method === "marzi/loadState") {
+      return handleState(widget, request.id, request.method, request.params);
     }
 
     const capability = registry.get(request.method);
@@ -409,7 +508,9 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       return source;
     });
 
-    const id = newWidgetId();
+    // A saved widget renders under its record id — that continuity is what
+    // makes its stored state (and, from rung 5, its grants) find it again.
+    const id = renderOptions?.id ?? newWidgetId();
     const frame = document.createElement("iframe");
 
     // Deny-by-default: `sandbox` strips nearly every privilege, and each token
