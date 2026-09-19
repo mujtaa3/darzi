@@ -96,6 +96,7 @@ td .note { color: #8a93a0; font-size: .8rem; display: block; }
   text-transform: uppercase; letter-spacing: .04em; }
 .kind.read { background: #e5efe8; color: #17843f; }
 .kind.write { background: #fbeae4; color: #b04a1e; }
+.kind.lib { background: #e8ecf7; color: #3d5bb3; }
 
 .auditlog { font: 12px/1.6 ui-monospace, monospace; background: #14181d; color: #cdd4dc;
   border-radius: 8px; padding: .7rem .9rem; max-height: 16rem; overflow-y: auto; }

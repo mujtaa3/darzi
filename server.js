@@ -41,6 +41,30 @@ function catalogForPrompt() {
   return catalog().map((c) => `- \`${c.name}\`\n  ${c.description}`).join("\n\n");
 }
 
+/**
+ * Libraries the app vendors for widgets. The `description` teaches the model;
+ * the actual source text is registered client-side (app/widgets.html fetches
+ * app/vendor/*.js and hands it to createRuntime). Rolling pin: updating the
+ * vendored file updates every widget on its next render.
+ */
+const LIBRARIES = [
+  {
+    name: "chartjs",
+    file: "vendor/chart.umd.js", // path under app/, fetched by the studio page
+    description:
+      "Chart.js v4, already loaded — available as the global `Chart`.\n" +
+      "  Use: `new Chart(document.getElementById('c'), { type, data, options })`\n" +
+      "  with a <canvas id=\"c\"></canvas> in your markup. Core Chart.js only:\n" +
+      "  no plugins, no date adapters, no external fonts. Prefer it over\n" +
+      "  hand-drawn bars whenever the request calls for a real chart.",
+  },
+];
+
+function librariesForPrompt() {
+  if (LIBRARIES.length === 0) return "(none)";
+  return LIBRARIES.map((l) => `- \`${l.name}\`\n  ${l.description}`).join("\n\n");
+}
+
 /** Pull the three blocks out of the model's reply. */
 function parseWidget(text) {
   // Be forgiving about markdown fences the model may add around the whole reply.
@@ -57,9 +81,11 @@ function parseWidget(text) {
   }
 
   const capsRaw = grab("capabilities") ?? "";
+  const libsRaw = grab("libs") ?? "";
   return {
     title: grab("title") ?? "Untitled widget",
     capabilities: capsRaw.split(",").map((s) => s.trim()).filter(Boolean),
+    libs: libsRaw.split(",").map((s) => s.trim()).filter(Boolean),
     html,
     raw: cleaned,
   };
@@ -82,6 +108,7 @@ async function generate(request) {
 
   const prompt = body
     .replace("{{CAPABILITIES}}", catalogForPrompt())
+    .replace("{{LIBRARIES}}", librariesForPrompt())
     .replace("{{REQUEST}}", request);
 
   const response = await client.messages.create({
@@ -133,6 +160,7 @@ const server = createServer(async (req, res) => {
       const widget = await generate(request);
       console.log(
         `  ✓ "${widget.title}"  caps=[${widget.capabilities.join(", ")}]  ` +
+          `libs=[${widget.libs.join(", ")}]  ` +
           `${widget.html.length} bytes  (${widget.usage.input}→${widget.usage.output} tokens)`,
       );
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -152,6 +180,12 @@ const server = createServer(async (req, res) => {
   if (url.pathname === "/api/catalog") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(catalog()));
+    return;
+  }
+
+  if (url.pathname === "/api/libraries") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(LIBRARIES.map(({ name, file }) => ({ name, file }))));
     return;
   }
 
