@@ -10,3 +10,6 @@ app/data.local.json
 docs/
 learnings/
 CLAUDE.md
+
+# Secrets — the API key lives here; never committed
+.env
