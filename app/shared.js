@@ -30,12 +30,15 @@ export function nav(active) {
   document.body.prepend(header);
 }
 
-/** Fetch JSON from the app's own backend; throw the server's error message. */
-export async function api(path, body) {
-  const res = await fetch(path, body === undefined ? undefined : {
-    method: "POST",
+/**
+ * Fetch JSON from the app's own backend; throw the server's error message.
+ * No body and no method → GET. A body → POST. Method overrides (e.g. DELETE).
+ */
+export async function api(path, body, method) {
+  const res = await fetch(path, body === undefined && method === undefined ? undefined : {
+    method: method ?? "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? `${res.status} on ${path}`);

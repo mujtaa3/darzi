@@ -50,6 +50,22 @@ const rows = await marzi.call("transactions.list", { month: "2026-08" });
   useful instead of failing silently.
 - You may only call the capabilities listed below. Do not invent names.
 
+## Remembering things: `marzi.saveState` / `marzi.loadState`
+
+Your widget has one small memory slot that survives reloads:
+
+```js
+const saved = await marzi.loadState();        // null on the first run
+marzi.saveState({ budget: 500 });             // replaces the whole slot
+```
+
+- Use it for **user-chosen settings** — a budget, a threshold, a preferred
+  view. Not for caching capability data: fetch data fresh each time.
+- `loadState` resolves to exactly what was saved, or `null` if nothing was.
+  Always handle the `null` first run.
+- Keep it small (one JSON object, well under 50 KB) — oversized saves are
+  refused. Both functions return Promises and can reject; handle it.
+
 ## Capabilities available to you
 
 {{CAPABILITIES}}
