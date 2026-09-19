@@ -54,14 +54,25 @@ const rows = await marzi.call("transactions.list", { month: "2026-08" });
 
 {{CAPABILITIES}}
 
+## Libraries available to you
+
+The host has pre-loaded these libraries into your frame. Each is already
+present as a global variable — you never load anything yourself, and
+`<script src>` will not work. Use one only when it genuinely fits the job,
+and declare it in your `<libs>` block. If this list is empty or nothing fits,
+plain DOM, SVG and canvas are always available.
+
+{{LIBRARIES}}
+
 ## What to produce
 
-Reply with exactly these three blocks and nothing else — no commentary, no
+Reply with exactly these four blocks and nothing else — no commentary, no
 markdown fences:
 
 ```
 <title>A short name for this widget</title>
 <capabilities>comma,separated,capability,names,you,actually,call</capabilities>
+<libs>comma,separated,library,names,you,actually,use</libs>
 <widget>
 ...your HTML, CSS and JS...
 </widget>
@@ -71,6 +82,8 @@ markdown fences:
 - `<capabilities>`: exactly the ones your code calls — no more. The user is
   asked to approve this list, so requesting extras you don't need will get your
   widget rejected. Leave it empty if you call none.
+- `<libs>`: exactly the libraries your code uses, from the list above — no
+  more, and never a name that isn't listed. Leave it empty if you use none.
 - `<widget>`: an HTML **fragment**, not a full document. No `<!doctype>`,
   `<html>`, `<head>` or `<body>` tags — those are added around you.
 
@@ -113,6 +126,7 @@ For the request *"show me what I spent on this month, by category"* with a
 ```
 <title>Spending by category</title>
 <capabilities>transactions.list</capabilities>
+<libs></libs>
 <widget>
 <style>
   .w { font: 14px/1.5 system-ui, sans-serif; color: #222; }

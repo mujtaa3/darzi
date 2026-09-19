@@ -57,11 +57,21 @@
   const $ = (id) => document.getElementById(id);
   const statusEl = $("status");
 
-  const catalog = await api("/api/catalog");
+  const [catalog, libMenu] = await Promise.all([api("/api/catalog"), api("/api/libraries")]);
   const GRANTED = catalog.map((c) => c.name);
+  const LIBS = libMenu.map((l) => l.name);
+
+  // Vendored library text, fetched once from our own origin and handed to the
+  // runtime as strings. The frame itself stays networkless — injection happens
+  // at scaffold time, host-side.
+  const libraries = await Promise.all(
+    libMenu.map(async (l) => ({ name: l.name, source: await fetch(`./${l.file}`).then((r) => r.text()) })),
+  );
 
   $("catalog").innerHTML = catalog.map((c) =>
     `<li><span class="kind ${c.kind}">${c.kind}</span><code>${esc(c.name)}</code></li>`
+  ).join("") + libMenu.map((l) =>
+    `<li><span class="kind lib">lib</span><code>${esc(l.name)}</code></li>`
   ).join("");
 
   // ── The switchboard's decisions, live ─────────────────────────────────────
@@ -75,6 +85,7 @@
 
   const runtime = createRuntime({
     capabilities: buildCapabilities(catalog),
+    libraries,
     onAudit: (e) => logAudit(
       `${e.method} — ${e.decision}${e.reason ? ` (${e.reason})` : ""}`,
       e.decision === "dispatched" ? "ok" : "no",
@@ -87,7 +98,7 @@
   });
 
   // ── Static compliance checks (same rules as the prompt template) ──────────
-  function checkCompliance(html, declared) {
+  function checkCompliance(html, declared, declaredLibs) {
     const called = [...html.matchAll(/marzi\.call\(\s*["'`]([^"'`]+)["'`]/g)].map((m) => m[1]);
     const unique = [...new Set(called)];
     return [
@@ -107,6 +118,12 @@
         label: `calls only real capabilities (${unique.join(", ") || "none"})` },
       { ok: declared.length === unique.length && declared.every((d) => unique.includes(d)),
         label: `declared capabilities match calls (declared: ${declared.join(", ") || "none"})` },
+      { ok: declaredLibs.every((l) => LIBS.includes(l)),
+        label: `declares only real libraries (${declaredLibs.join(", ") || "none"})` },
+      // Heuristic, same honesty level as the rest: using the Chart global
+      // without declaring chartjs means the widget would die on render.
+      { ok: !/\bnew Chart\s*\(|\bChart\./.test(html) || declaredLibs.includes("chartjs"),
+        label: "uses Chart ⇒ declares chartjs" },
     ];
   }
 
@@ -114,10 +131,14 @@
   function show(widget) {
     if (live) live.destroy();
     $("slot").innerHTML = "";
-    live = runtime.render(widget.html, $("slot"));
-    logAudit(`rendered "${widget.title}" as ${live.id.slice(0, 8)}…`, "ok");
+    // Inject only DECLARED libraries that exist in the menu: an undeclared
+    // name would throw in render, and the declaration is what a saved widget
+    // will carry in its record (rung 6).
+    const libs = (widget.libs ?? []).filter((l) => LIBS.includes(l));
+    live = runtime.render(widget.html, $("slot"), { libs });
+    logAudit(`rendered "${widget.title}" as ${live.id.slice(0, 8)}… libs=[${libs.join(", ")}]`, "ok");
 
-    const results = checkCompliance(widget.html, widget.capabilities);
+    const results = checkCompliance(widget.html, widget.capabilities, widget.libs ?? []);
     $("checks").innerHTML = results
       .map((r) => `<li class="${r.ok ? "pass" : "fail"}">${esc(r.label)}</li>`)
       .join("");
@@ -148,6 +169,7 @@
 
   // Reads, a write, a refine-ish ask, and one that needs what we don't have.
   const EXAMPLES = [
+    "a proper line chart of monthly spending for the last 12 months",
     "how has my spending changed month over month this year?",
     "which subscriptions got more expensive, and when?",
     "find suspicious transactions: duplicates, fees, anything unusual",
