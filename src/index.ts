@@ -76,6 +76,36 @@ export interface Capability {
   handler: CapabilityHandler;
 }
 
+/**
+ * A library the host vendors for widgets to use — e.g. Chart.js as a string.
+ *
+ * `source` is browser-ready JavaScript text (an IIFE/UMD build that assigns a
+ * global), injected inline into the frame's <head> when a widget asks for it
+ * by name. The host obtains and pins this text at its own build time; marzi
+ * never fetches anything, so the no-network wall stands.
+ *
+ * Security position: the text runs INSIDE the jail, so it carries zero
+ * authority — it cannot call anything the widget could not already call.
+ * Which library text to trust is the host's supply-chain decision, same as
+ * any dependency it ships to its own pages.
+ */
+export interface Library {
+  /** The name widgets request, e.g. "chartjs". Opaque to marzi. */
+  name: string;
+  /** The complete library source, ready to run as one inline script. */
+  source: string;
+}
+
+/** Per-render choices. */
+export interface RenderOptions {
+  /**
+   * Names of registered libraries to inject into this widget's frame.
+   * Unknown names throw: that is a host programming error, and failing loudly
+   * here beats a widget dying inside the jail on an undefined global.
+   */
+  libs?: string[];
+}
+
 /** A rendered widget: its identity, its frame, and how to tear it down. */
 export interface Widget {
   /** Stable id. Grants, audit entries and stored state all key off this. */
@@ -130,6 +160,8 @@ export interface WidgetFault {
 
 export interface RuntimeOptions {
   capabilities: Capability[];
+  /** Vendored libraries widgets may request by name at render. */
+  libraries?: Library[];
   /** Called for every inbound call, allowed or not. Must not throw. */
   onAudit?: (event: AuditEvent) => void;
   /** Called when a widget fails to start or its code throws. Must not throw. */
@@ -155,7 +187,7 @@ export interface RuntimeOptions {
 }
 
 export interface Runtime {
-  render(body: WidgetBody, container: HTMLElement): Widget;
+  render(body: WidgetBody, container: HTMLElement, options?: RenderOptions): Widget;
 }
 
 /** Everything the runtime knows about one rendered widget. */
@@ -193,6 +225,11 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   const registry = new Map<string, Capability>();
   for (const capability of options.capabilities) {
     registry.set(capability.name, capability);
+  }
+
+  const libraries = new Map<string, string>();
+  for (const lib of options.libraries ?? []) {
+    libraries.set(lib.name, lib.source);
   }
 
   /**
@@ -362,7 +399,16 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     }
   }
 
-  function render(body: WidgetBody, container: HTMLElement): Widget {
+  function render(body: WidgetBody, container: HTMLElement, renderOptions?: RenderOptions): Widget {
+    // Resolve library names before any DOM work, so a bad name costs nothing.
+    const libSources = (renderOptions?.libs ?? []).map((name) => {
+      const source = libraries.get(name);
+      if (source === undefined) {
+        throw new Error(`unknown library "${name}" — register it in createRuntime({ libraries })`);
+      }
+      return source;
+    });
+
     const id = newWidgetId();
     const frame = document.createElement("iframe");
 
@@ -378,7 +424,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     frame.setAttribute("allow", FRAME_ALLOW);
     frame.setAttribute("referrerpolicy", FRAME_REFERRER_POLICY);
 
-    frame.srcdoc = scaffold(body);
+    frame.srcdoc = scaffold(body, libSources);
 
     // The private line. port1 stays here; port2 is handed to the widget and
     // becomes the only way it can reach us.
