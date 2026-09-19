@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const CSV_PATH = process.env.TRANSACTIONS_CSV ?? HERE + "transactions.csv";
 const LOCAL_PATH = HERE + "data.local.json";
+const WIDGETS_PATH = HERE + "widgets.local.json";
 
 /**
  * Parse CSV with quoted-field support ("Payroll, Inc" and "" escapes).
@@ -84,6 +85,47 @@ function view(t) {
     category: local.categories[t.id] ?? t.category,
     note: local.notes[t.id] ?? "",
   };
+}
+
+/**
+ * The widget shelf — Ledger's implementation of marzi's WidgetStore idea,
+ * server-side so widgets survive reloads and (in a real deployment) follow
+ * the user across devices. Records and per-widget state in one gitignored
+ * file, same overlay pattern as data.local.json.
+ *
+ * The page is OUR page, but "never trust the page" still applies: everything
+ * is shape-checked and size-capped here too. State arrives as an opaque JSON
+ * string — the marzi runtime already sanitized and serialized it; the server
+ * only stores bytes.
+ */
+function loadWidgets() {
+  if (!existsSync(WIDGETS_PATH)) return { records: {}, state: {} };
+  return JSON.parse(readFileSync(WIDGETS_PATH, "utf8"));
+}
+const widgets = loadWidgets();
+const saveWidgets = () => writeFileSync(WIDGETS_PATH, JSON.stringify(widgets, null, 2) + "\n");
+
+const MAX_BODY = 200_000; // per version; a widget is a fragment, not an app
+const MAX_STATE = 100_000; // server-side backstop; the runtime caps at 64k first
+
+/** Throw unless `record` looks like a WidgetRecord we are willing to keep. */
+function checkRecord(record) {
+  const isStr = (v) => typeof v === "string";
+  const isStrArr = (v) => Array.isArray(v) && v.every(isStr);
+  if (typeof record !== "object" || record === null) throw new Error("record must be an object");
+  if (!isStr(record.id) || !/^[\w-]{1,64}$/.test(record.id)) throw new Error("bad record id");
+  if (!isStr(record.title) || record.title.length > 200) throw new Error("bad title");
+  if (!isStrArr(record.grants)) throw new Error("bad grants");
+  if (!Array.isArray(record.versions) || record.versions.length === 0) throw new Error("no versions");
+  for (const v of record.versions) {
+    if (typeof v.n !== "number") throw new Error("bad version number");
+    if (!isStr(v.body) || v.body.length > MAX_BODY) throw new Error("bad version body");
+    if (!isStrArr(v.capabilities) || !isStrArr(v.libs)) throw new Error("bad version metadata");
+    if (!isStr(v.request) || v.request.length > 4000) throw new Error("bad version request");
+  }
+  if (!record.versions.some((v) => v.n === record.activeVersion)) {
+    throw new Error("activeVersion points at no version");
+  }
 }
 
 const monthOf = (t) => t.date.slice(0, 7);
@@ -257,6 +299,49 @@ export async function handleFinanceApi(url, method, body) {
     local.categories[id] = category.trim();
     saveLocal();
     return { status: 200, body: view(t) };
+  }
+
+  // ── The widget shelf ───────────────────────────────────────────────────
+  if (p === "/api/widgets" && method === "GET") {
+    const summaries = Object.values(widgets.records)
+      .map(({ id, title, updatedAt, grants, activeVersion, versions }) => {
+        const active = versions.find((v) => v.n === activeVersion);
+        return { id, title, updatedAt, grants, capabilities: active.capabilities, libs: active.libs };
+      })
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+    return { status: 200, body: summaries };
+  }
+
+  if (p === "/api/widgets" && method === "POST") {
+    checkRecord(body);
+    widgets.records[body.id] = body;
+    saveWidgets();
+    return { status: 200, body: { saved: body.id } };
+  }
+
+  const widgetPath = /^\/api\/widgets\/([\w-]{1,64})(\/state)?$/.exec(p);
+  if (widgetPath) {
+    const [, id, isState] = widgetPath;
+    if (!isState && method === "GET") {
+      const record = widgets.records[id];
+      return record ? { status: 200, body: record } : { status: 404, body: { error: "no such widget" } };
+    }
+    if (!isState && method === "DELETE") {
+      delete widgets.records[id];
+      delete widgets.state[id];
+      saveWidgets();
+      return { status: 200, body: { deleted: id } };
+    }
+    if (isState && method === "GET") {
+      return { status: 200, body: { json: widgets.state[id] ?? null } };
+    }
+    if (isState && method === "POST") {
+      const { json } = body ?? {};
+      if (typeof json !== "string" || json.length > MAX_STATE) throw new Error("bad state payload");
+      widgets.state[id] = json;
+      saveWidgets();
+      return { status: 200, body: { saved: true } };
+    }
   }
 
   if (p === "/api/transactions/note" && method === "POST") {
