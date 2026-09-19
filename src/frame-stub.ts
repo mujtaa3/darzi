@@ -51,6 +51,20 @@ export const FRAME_STUB = `
         pending[id] = { resolve: resolve, reject: reject, timer: timer };
         transmit({ jsonrpc: "2.0", id: id, method: method, params: params });
       });
+    },
+
+    /**
+     * Persist one small JSON value for THIS widget; it comes back from
+     * loadState on a future render of the same saved widget. The host caps
+     * the size and may refuse — handle rejection like any other call.
+     */
+    saveState: function (value) {
+      return window.marzi.call("marzi/saveState", { value: value });
+    },
+
+    /** Resolves with the saved value, or null if nothing was ever saved. */
+    loadState: function () {
+      return window.marzi.call("marzi/loadState");
     }
   };
 
