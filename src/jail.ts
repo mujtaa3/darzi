@@ -68,23 +68,46 @@ export const FRAME_ALLOW = "";
 export const FRAME_REFERRER_POLICY = "no-referrer";
 
 /**
+ * Make JavaScript text safe to embed in an inline <script>.
+ *
+ * The HTML parser does not understand JavaScript: inside a <script> element it
+ * simply scans for the characters `</script` (case-insensitive) and ends the
+ * element there — even mid-string. Vendored library text is thousands of lines
+ * we didn't write, so the sequence must be neutralised. Replacing `</script`
+ * with `<\/script` is semantically identical inside a JS string literal
+ * ("\/" === "/") and cannot appear as valid syntax outside one.
+ */
+function inlineScriptSafe(source: string): string {
+  return source.replace(/<\/script/gi, "<\\/script");
+}
+
+/**
  * Wrap the model's HTML in a document whose head we control.
  *
  * The CSP `<meta>` must precede every widget byte, because a meta policy only
  * governs what is parsed after it. Composing the document ourselves is what
  * makes that guarantee — the widget can never get a tag in ahead of ours.
  *
- * The stub goes in the head too, so it captures the port before any widget code
- * has a chance to run.
+ * Head order matters: the stub first (so `marzi` exists no matter what a
+ * library does), then vendored libraries (so their globals exist by the time
+ * widget code runs during parse), then the widget's body.
+ *
+ * `libSources` is library text the HOST vendored and pinned — never fetched,
+ * because the frame has no network and must keep having none. A library runs
+ * inside the jail and therefore holds no authority: it cannot reach anything
+ * the widget could not already reach. Injection is composition, not permission.
  */
-export function scaffold(body: string): string {
+export function scaffold(body: string, libSources: string[] = []): string {
+  const libs = libSources
+    .map((source) => `<script>${inlineScriptSafe(source)}</script>\n`)
+    .join("");
   return `<!doctype html>
 <html>
 <head>
 <meta http-equiv="Content-Security-Policy" content="${WIDGET_CSP}">
 <meta charset="utf-8">
 <script>${FRAME_STUB}</script>
-</head>
+${libs}</head>
 <body>
 ${body}
 </body>
