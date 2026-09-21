@@ -93,23 +93,25 @@ function parseWidget(text) {
 
 const client = new Anthropic(); // resolves ANTHROPIC_API_KEY from the environment
 
-async function generate(request) {
+/** Load a prompt template and fill its placeholders. */
+async function buildPrompt(file, slots) {
+  const template = await readFile(join(ROOT, "prompts", file), "utf8");
+  // The template file carries a header explaining itself; everything from the
+  // first horizontal rule onward is the actual prompt.
+  let prompt = template.slice(template.indexOf("\n---\n") + 5);
+  for (const [name, text] of Object.entries(slots)) {
+    prompt = prompt.replace(`{{${name}}}`, text);
+  }
+  return prompt;
+}
+
+/** Send a finished prompt to the model and parse the widget out of the reply. */
+async function runModel(prompt) {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error(
       "ANTHROPIC_API_KEY is not set. Run:  export ANTHROPIC_API_KEY=sk-ant-...  then restart the server.",
     );
   }
-
-  const template = await readFile(join(ROOT, "prompts", "widget-author.md"), "utf8");
-
-  // The template file carries a header explaining itself; everything from the
-  // first horizontal rule onward is the actual prompt.
-  const body = template.slice(template.indexOf("\n---\n") + 5);
-
-  const prompt = body
-    .replace("{{CAPABILITIES}}", catalogForPrompt())
-    .replace("{{LIBRARIES}}", librariesForPrompt())
-    .replace("{{REQUEST}}", request);
 
   const response = await client.messages.create({
     model: "claude-opus-5",
@@ -135,6 +137,30 @@ async function generate(request) {
   return widget;
 }
 
+async function generate(request) {
+  return runModel(await buildPrompt("widget-author.md", {
+    CAPABILITIES: catalogForPrompt(),
+    LIBRARIES: librariesForPrompt(),
+    REQUEST: request,
+  }));
+}
+
+/**
+ * Revise an existing widget. `previousBody` is model-written code that may
+ * have been influenced by hostile data on an earlier run — the template
+ * frames it as material to revise, never as instructions (cross-time
+ * injection). This endpoint is record-agnostic on purpose: the page owns its
+ * record; generation knows nothing about storage.
+ */
+async function refine(request, previousBody) {
+  return runModel(await buildPrompt("widget-refine.md", {
+    CAPABILITIES: catalogForPrompt(),
+    LIBRARIES: librariesForPrompt(),
+    PREVIOUS: previousBody,
+    REQUEST: request,
+  }));
+}
+
 function readBody(req) {
   return new Promise((ok, no) => {
     let data = "";
@@ -150,14 +176,25 @@ function readBody(req) {
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
-  if (url.pathname === "/api/generate" && req.method === "POST") {
+  const isGenerate = url.pathname === "/api/generate";
+  const isRefine = url.pathname === "/api/refine";
+  if ((isGenerate || isRefine) && req.method === "POST") {
     try {
-      const { request } = JSON.parse(await readBody(req));
+      const { request, previous } = JSON.parse(await readBody(req));
       if (typeof request !== "string" || !request.trim()) {
         throw new Error("missing 'request'");
       }
-      console.log(`\n▸ generating: ${request}`);
-      const widget = await generate(request);
+      let widget;
+      if (isRefine) {
+        if (typeof previous !== "string" || !previous.trim()) {
+          throw new Error("missing 'previous' (the current version's body)");
+        }
+        console.log(`\n↻ refining: ${request}`);
+        widget = await refine(request, previous);
+      } else {
+        console.log(`\n▸ generating: ${request}`);
+        widget = await generate(request);
+      }
       console.log(
         `  ✓ "${widget.title}"  caps=[${widget.capabilities.join(", ")}]  ` +
           `libs=[${widget.libs.join(", ")}]  ` +
