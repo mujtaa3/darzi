@@ -24,6 +24,13 @@
 
   <div class="slot" id="slot"></div>
 
+  <div class="toolbar" id="refinebar" hidden>
+    <span id="versions" style="display:flex;gap:.35rem"></span>
+    <input id="refineq" placeholder="What should change? e.g. make the bars green"
+           style="flex:1" maxlength="4000">
+    <button id="refine">Refine</button>
+  </div>
+
   <h2>My shelf</h2>
   <p class="sub">Saved widgets. Loading one renders it under its own durable id,
   so anything it remembered with <code>marzi.saveState</code> comes back.</p>
@@ -143,6 +150,7 @@
 
   let live = null;    // the currently rendered widget, so regeneration tears it down
   let current = null; // the last generated (not yet saved) widget, for the Save button
+  let loaded = null;  // the shelf record currently loaded — refine/rollback target
 
   function show(widget, durableId) {
     if (live) live.destroy();
@@ -175,6 +183,8 @@
     try {
       const widget = await api("/api/generate", { request });
       current = { ...widget, request };
+      loaded = null;
+      $("refinebar").hidden = true;
       $("save").hidden = false;
       show(widget);
     } catch (err) {
@@ -208,9 +218,11 @@
     };
     await api("/api/widgets", record);
     $("save").hidden = true;
-    // Re-render under the durable id, so state saved from here on sticks.
-    show(current, record.id);
-    statusEl.textContent = `saved "${current.title}" to the shelf`;
+    current = null;
+    // Re-render under the durable id (state sticks from here on) and make it
+    // the loaded record — a just-saved widget is immediately refinable.
+    adopt(record);
+    statusEl.textContent = `saved "${record.title}" to the shelf`;
     await showShelf();
   };
 
@@ -238,12 +250,85 @@
       return;
     }
     const record = await api(`/api/widgets/${id}`);
-    const version = record.versions.find((v) => v.n === record.activeVersion);
     $("save").hidden = true;
     current = null;
-    show({ title: record.title, html: version.body,
-           capabilities: version.capabilities, libs: version.libs }, record.id);
+    adopt(record);
     statusEl.textContent = `loaded "${record.title}" from the shelf`;
+  };
+
+  // ── Refine & rollback (rung 6.5, mechanical half) ────────────────────────
+  /** Make a record the loaded one: render its active version, show controls. */
+  function adopt(record) {
+    loaded = record;
+    const v = record.versions.find((x) => x.n === record.activeVersion);
+    show({ title: record.title, html: v.body,
+           capabilities: v.capabilities, libs: v.libs }, record.id);
+    renderChips();
+    $("refinebar").hidden = false;
+  }
+
+  function renderChips() {
+    $("versions").innerHTML = loaded.versions.map((v) =>
+      `<button class="chip ${v.n === loaded.activeVersion ? "active" : ""}"
+               data-v="${v.n}" title="${esc(v.request)}">v${v.n}</button>`).join("");
+  }
+
+  // Point activeVersion somewhere else — non-destructive in both directions:
+  // nothing is deleted, so rolling back and forward are the same move.
+  $("versions").onclick = async (e) => {
+    const n = Number(e.target.dataset.v);
+    if (!loaded || !n || n === loaded.activeVersion) return;
+    loaded.activeVersion = n;
+    loaded.updatedAt = Date.now();
+    await api("/api/widgets", loaded);
+    adopt(loaded);
+    logAudit(`activated v${n}`, "ok");
+  };
+
+  /** Informational only — rung 5 turns this delta into re-consent. */
+  function logDelta(prev, next) {
+    const diff = (a, b) =>
+      [...b.filter((x) => !a.includes(x)).map((x) => "+" + x),
+       ...a.filter((x) => !b.includes(x)).map((x) => "−" + x)];
+    const caps = diff(prev.capabilities, next.capabilities);
+    const libs = diff(prev.libs, next.libs);
+    logAudit(
+      `v${prev.n}→v${next.n} caps: ${caps.join(" ") || "unchanged"} · libs: ${libs.join(" ") || "unchanged"}`,
+      caps.length || libs.length ? "fault" : "ok", // amber when authority would change
+    );
+  }
+
+  $("refine").onclick = async () => {
+    const request = $("refineq").value.trim();
+    if (!loaded || !request) return;
+    $("refine").disabled = true;
+    statusEl.textContent = "refining… (typically 30–60s)";
+    try {
+      const prev = loaded.versions.find((v) => v.n === loaded.activeVersion);
+      const widget = await api("/api/refine", { request, previous: prev.body });
+      const version = {
+        n: Math.max(...loaded.versions.map((v) => v.n)) + 1,
+        body: widget.html,
+        capabilities: widget.capabilities,
+        libs: (widget.libs ?? []).filter((l) => LIBS.includes(l)),
+        request,
+        createdAt: Date.now(),
+      };
+      loaded.versions.push(version);
+      loaded.activeVersion = version.n;
+      loaded.title = widget.title;
+      loaded.updatedAt = Date.now();
+      await api("/api/widgets", loaded);
+      logDelta(prev, version);
+      adopt(loaded);
+      $("refineq").value = "";
+      await showShelf();
+    } catch (err) {
+      statusEl.textContent = "";
+      $("slot").innerHTML = `<div class="err">${esc(err.message)}</div>`;
+    } finally {
+      $("refine").disabled = false;
+    }
   };
 
   $("go").onclick = () => generate($("request").value);
