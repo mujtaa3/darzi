@@ -36,6 +36,17 @@ export default defineConfig({
   projects: [
     { name: "chrome", use: { ...devices["Desktop Chrome"], channel: "chrome" } },
     { name: "webkit", use: { ...devices["Desktop Safari"] } },
-    { name: "firefox", use: { ...devices["Desktop Firefox"] } },
+    {
+      name: "firefox",
+      use: {
+        ...devices["Desktop Firefox"],
+        // Firefox leaves loopback interfaces out of ICE by default, so a STUN
+        // witness on 127.0.0.1 hears nothing even from a frame with no CSP at
+        // all (measured: 4 candidates gathered, 0 datagrams). This lets the
+        // local witness listen; it does not loosen anything under test — a
+        // real attacker's STUN server would be public, not loopback.
+        launchOptions: { firefoxUserPrefs: { "media.peerconnection.ice.loopback": true } },
+      },
+    },
   ],
 });

@@ -45,10 +45,12 @@ export const WIDGET_CSP = [
   "img-src data:", // inline images only — a remote <img> would be a beacon
   "font-src data:",
   "form-action 'none'", // submitting a form is a navigation, i.e. an exfil channel
-  // WebRTC has its own network path — it resolves and contacts the STUN server
-  // you name, which is a channel `connect-src` never covered. Hence a directive
-  // of its own. Chrome honours it; Firefox and Safari do not yet, so on those
-  // engines this remains an open hole, documented in the threat model.
+  // WebRTC has its own network path, which `connect-src` never covered; this
+  // directive exists for it. MEASURED 2026-09-27 (tests/attacks/webrtc.spec.ts):
+  // no engine we test honours it — Chrome, WebKit and Firefox all let a widget
+  // reach a STUN witness exactly as an unrestricted frame does. It stays in the
+  // policy because it costs nothing and engines may ship it; the suite pins the
+  // current behaviour so that day is noticed. Documented residual in README.
   "webrtc 'block'",
 ].join("; ");
 
