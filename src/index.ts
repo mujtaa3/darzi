@@ -9,7 +9,7 @@
 
 // The `.js` extension is required even though these files are `.ts`:
 // TypeScript never rewrites import paths, and browsers demand the full path.
-import { FRAME_ALLOW, FRAME_REFERRER_POLICY, SANDBOX_TOKENS, scaffold } from "./jail.js";
+import { FRAME_ALLOW, FRAME_REFERRER_POLICY, SANDBOX_TOKENS, scaffold, warden } from "./jail.js";
 import {
   fail,
   justCrossedRate,
@@ -128,7 +128,12 @@ export interface RenderOptions {
 export interface Widget {
   /** Stable id. Grants, audit entries and stored state all key off this. */
   id: string;
-  /** The jail. Remove it from the DOM to destroy the widget. */
+  /**
+   * The outer frame in the host's DOM — the warden, which contains the
+   * widget's own frame. Size and place this one. Removing it from the DOM
+   * removes both frames but does NOT release the runtime's listeners and port;
+   * call `destroy()` for that.
+   */
   frame: HTMLIFrameElement;
   /** Stop listening and tear the widget down. */
   destroy(): void;
@@ -513,10 +518,15 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     const id = renderOptions?.id ?? newWidgetId();
     const frame = document.createElement("iframe");
 
+    // This frame is the WARDEN — ours, script-free — and the widget's own frame
+    // lives inside it. The warden's `frame-src 'none'` is what stops the widget
+    // navigating itself away with data in the URL; see jail.ts.
+    //
     // Deny-by-default: `sandbox` strips nearly every privilege, and each token
-    // hands one back. We grant exactly one, because a widget that cannot run
-    // JavaScript is useless. Withholding `allow-same-origin` is what makes the
-    // frame a nobody — see jail.ts.
+    // hands one back. We grant exactly one — sandbox flags are inherited by
+    // nested frames, so the widget's scripts need the warden to allow scripts,
+    // though the warden itself runs none. Withholding `allow-same-origin` is
+    // what makes both frames nobodies, with DIFFERENT opaque origins.
     frame.setAttribute("sandbox", SANDBOX_TOKENS);
 
     // Two further mechanisms, each governing an axis the sandbox does not:
@@ -525,7 +535,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     frame.setAttribute("allow", FRAME_ALLOW);
     frame.setAttribute("referrerpolicy", FRAME_REFERRER_POLICY);
 
-    frame.srcdoc = scaffold(body, libSources);
+    frame.srcdoc = warden(scaffold(body, libSources));
 
     // The private line. port1 stays here; port2 is handed to the widget and
     // becomes the only way it can reach us.
@@ -549,25 +559,30 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     };
 
     // The handshake. We listen on the party line for the widget's knock, verify
-    // it really came from this frame, and answer exactly once.
+    // it really came from the widget's frame, and answer exactly once.
     let portIssued = false;
     const onKnock = (event: MessageEvent): void => {
       if (portIssued) return;
 
       // Identity is the WINDOW, never the origin: an opaque frame's origin is
       // the useless string "null", but `event.source` is set by the browser and
-      // cannot be forged. A different frame shouting "ready" fails this check.
-      if (event.source !== frame.contentWindow) return;
+      // cannot be forged. The widget's window is the warden's first child —
+      // reachable cross-origin because `frames[i]` is on the small allowlist of
+      // window properties any origin may read. A different frame (including
+      // the warden itself) shouting "ready" fails this check.
+      const inner = frame.contentWindow?.frames[0];
+      if (inner === undefined || event.source !== inner) return;
 
       const data = event.data as { marzi?: unknown } | null;
       if (!data || data.marzi !== "ready") return;
 
       // Answer once and stop listening. Never re-issue: a second port would be
-      // a second, unaccounted-for line into the same jail.
+      // a second, unaccounted-for line into the same jail. The port goes
+      // straight to the widget's window; the warden never handles it.
       portIssued = true;
       clearTimeout(startTimer);
       window.removeEventListener("message", onKnock);
-      frame.contentWindow?.postMessage({ marzi: "port" }, "*", [channel.port2]);
+      inner.postMessage({ marzi: "port" }, "*", [channel.port2]);
     };
     window.addEventListener("message", onKnock);
 
