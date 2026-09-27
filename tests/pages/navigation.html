@@ -1,0 +1,48 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>navigation</title>
+<style>iframe{width:160px;height:50px}</style></head>
+<body>
+<div id="controls"></div><div id="runtime"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+  const WITNESS = "http://127.0.0.1:9999/witness";
+
+  // The four ways a document can replace itself with another URL. Each one
+  // succeeds by destroying the frame, so controls use one frame per move.
+  const MOVES = {
+    href:    (u) => `location.href = ${JSON.stringify(u)};`,
+    replace: (u) => `location.replace(${JSON.stringify(u)});`,
+    meta:    (u) => `var m = document.createElement("meta"); m.httpEquiv = "refresh"; m.content = "0;url=" + ${JSON.stringify(u)}; document.head.appendChild(m);`,
+    form:    (u) => `var f = document.createElement("form"); f.method = "GET"; f.action = ${JSON.stringify(u)}; document.body.appendChild(f); f.submit();`,
+  };
+
+  // Controls: sandboxed like a widget but with no warden above them. Three of
+  // the four must arrive; `form` cannot even here, because form submission
+  // needs the allow-forms sandbox token we never grant.
+  for (const [name, move] of Object.entries(MOVES)) {
+    const f = document.createElement("iframe");
+    f.setAttribute("sandbox", "allow-scripts");
+    f.srcdoc = `<body>control ${name}<script>setTimeout(function () { try { ${move(WITNESS + "?via=control-" + name)} } catch (e) {} }, 200);<\/script></body>`;
+    document.getElementById("controls").appendChild(f);
+  }
+
+  // The runtime: each widget checks in, makes its move, and — if it is still
+  // a document 600ms later — checks in again. (Chrome replaces a blocked
+  // document with its blocked-page, so "alive" is engine-specific; "arrived"
+  // at the witness is the assertion that matters.)
+  const runtime = createRuntime({
+    capabilities: [{ name: "probe.report", description: "checkpoint", handler: (p) => { log(String(p && p.at)); } }],
+    onWidgetFault: (f) => log("fault:" + f.kind),
+  });
+  for (const [name, move] of Object.entries(MOVES)) {
+    runtime.render(`<div>runtime ${name}</div><script>
+      marzi.call("probe.report", { at: "start:${name}" }).then(function () {
+        try { ${move(WITNESS + "?via=runtime-" + name)} } catch (e) { marzi.call("probe.report", { at: "threw:${name}:" + e.name }); }
+        setTimeout(function () { marzi.call("probe.report", { at: "alive:${name}" }); }, 600);
+      });
+    <\/script>`, document.getElementById("runtime"));
+  }
+</script>
+</body></html>
