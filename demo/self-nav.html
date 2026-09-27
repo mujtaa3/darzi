@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>marzi — the leak CSP cannot close</title>
+<title>marzi — the leak CSP cannot close (and the warden can)</title>
 <style>
   body { font: 15px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 50rem; padding: 0 1rem; }
   h1 { font-size: 1.3rem; }
@@ -26,33 +26,42 @@
   <a href="./transactions.html">real data</a>
 </nav>
 
-<h1>The leak CSP cannot close</h1>
+<h1>The leak CSP cannot close — and the warden can</h1>
 
 <p>The widget below is fully jailed: opaque origin, no cookies, no storage, and
 <code>default-src 'none'</code>. It asks for your transactions — a granted,
-legitimate call — and then tries to mail them out two ways.</p>
+legitimate call — and then tries to mail them out two ways. <strong>Before
+rung 8 this page leaked real data.</strong> The attack code is unchanged; only
+the runtime is.</p>
 
 <p class="warn"><strong>Run the listener first</strong>, because this page cannot
 be trusted to report on itself: <code>python3 demo/exfil-listener.py</code>. Only
 a server watching for the request can tell you whether bytes actually left.</p>
 
 <ol>
-  <li><code>fetch()</code> — a <em>request</em>. The CSP refuses it.</li>
-  <li><code>location.href = …</code> — a <em>navigation</em>. No CSP directive
-      governs it, because <code>navigate-to</code> was never shipped in any
-      browser. The widget simply leaves, carrying your data in the URL.</li>
+  <li><code>fetch()</code> — a <em>request</em>. The widget's own CSP refuses it.</li>
+  <li><code>location.href = …</code> — a <em>navigation</em>. No directive in the
+      widget's own CSP governs it. Only the <em>embedder's</em>
+      <code>frame-src</code> does — so the runtime now embeds the widget in a
+      frame it controls, the <strong>warden</strong>, whose
+      <code>frame-src 'none'</code> stops the navigation before any DNS or TCP
+      leaves the machine.</li>
 </ol>
 
 <h2>The widget</h2>
-<p class="label">widget slot — watch it vanish</p>
+<p class="label">widget slot — it used to vanish</p>
 <div class="slot" id="slot"></div>
 
 <h2>What the switchboard sees</h2>
 <div id="log"></div>
 
-<p style="font-size:14px;color:#555">The switchboard sees a perfectly ordinary
-granted call and nothing else. The theft leaves no trace here at all — which is
-the point. Ground truth is the listener terminal.</p>
+<p style="font-size:14px;color:#555">Expected now: the listener stays silent. In
+Firefox and Safari the widget also reports itself still alive; Chrome replaces a
+frame whose navigation it blocked with its own blocked-page, so there the widget
+goes blank instead — same containment, different aftermath. For what the raw
+platform does <em>without</em> the warden, see
+<a href="./nav-matrix.html">nav-matrix.html</a>, which builds its frames by
+hand and still leaks by design.</p>
 
 <script type="module">
   import { createRuntime } from "../dist/index.js";
