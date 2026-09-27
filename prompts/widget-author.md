@@ -46,8 +46,8 @@ const rows = await marzi.call("transactions.list", { month: "2026-08" });
 
 - It returns a **Promise**.
 - It **rejects** if the host refuses — because the capability doesn't exist, or
-  the user didn't grant it. Always handle rejection and show the user something
-  useful instead of failing silently.
+  the host declined the call. Always handle rejection and show the user
+  something useful instead of failing silently.
 - You may only call the capabilities listed below. Do not invent names.
 
 ## Remembering things: `marzi.saveState` / `marzi.loadState`
