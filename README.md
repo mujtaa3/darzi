@@ -7,9 +7,9 @@ where it has no access to your page, your cookies, or the network — and can re
 your app only through capabilities you register by name.
 
 > **Status: early and incomplete.** The jail, the message channel, the
-> capability layer, persistence and refinement work and are demonstrated. The
-> attack suite and the navigation fix below do **not** exist yet. Not usable in
-> production.
+> capability layer, persistence, refinement and the navigation warden work and
+> are demonstrated. The cross-engine attack suite does **not** exist yet. Not
+> usable in production.
 
 ## Who decides what a widget may call
 
@@ -38,9 +38,12 @@ read/write mask are designed and scheduled for the first release after 0.1.0.
      your existing API — no changes
 ```
 
-Two independent browser mechanisms do the containment, and they are not
+Three independent browser mechanisms do the containment, and they are not
 interchangeable: the **`sandbox` attribute** takes away *identity* (no host DOM,
-no cookies), and **CSP** takes away *connectivity* (no fetch, no beacons).
+no cookies), **CSP** takes away *connectivity* (no fetch, no beacons), and the
+**warden** takes away *navigation* — a frame we control wraps the widget's
+frame, and its `frame-src 'none'` is the only thing a browser consults when a
+child frame tries to navigate itself somewhere with your data in the URL.
 
 ## The honest claim
 
@@ -50,10 +53,13 @@ no cookies), and **CSP** takes away *connectivity* (no fetch, no beacons).
 Claims deliberately **not** made: "no network of any kind", "the message channel
 is the only channel", "write grants make hostile code safe".
 
-**Known residual:** a widget can navigate *itself* away, carrying data in the URL.
-`sandbox` governs identity, CSP governs fetches, and neither governs navigation —
-only the embedder's `frame-src` does. Reproduced in `demo/self-nav.html`; a
-zero-config fix is planned.
+**Known residuals:** WebRTC on Firefox and Safari (the `webrtc` CSP directive
+is not implemented there — and current Chrome reports it unrecognized, which is
+being verified); DNS prefetch and preconnect hints; no CPU or memory isolation
+(a widget can spin); and nothing here checks that a widget's *numbers* are
+right — containment is not correctness. The self-navigation leak that used to
+head this list is closed by the warden (`demo/self-nav.html` shows the same
+attack, now stopped).
 
 ## Try it
 
