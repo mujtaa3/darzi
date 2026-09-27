@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>messages</title></head>
+<body>
+<div id="slot"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+
+  const runtime = createRuntime({
+    capabilities: [{
+      name: "probe.echo", description: "reports what params looked like on arrival",
+      handler: (p) => {
+        const own = p && typeof p === "object" ? Object.getOwnPropertyNames(p).sort().join(",") : typeof p;
+        // Three ways a prototype key could do harm: as an own key the handler
+        // trips over, as a rewritten prototype on the params object itself, or
+        // as pollution of Object.prototype for the whole page.
+        log(`REPORT ${JSON.stringify({ tag: p && p.tag, own,
+          protoIntact: Object.getPrototypeOf(p) === Object.prototype && p.polluted === undefined,
+          polluted: ({}).polluted !== undefined })}`);
+        return true;
+      },
+    }],
+    onAudit: (e) => log(`AUDIT ${e.method} ${e.decision}${e.reason ? " · " + e.reason : ""}`),
+  });
+
+  // The widget speaks on the raw port so it can send exactly the bytes it
+  // wants. Each message probes one boundary check; the flood comes last
+  // because it poisons the window for everything after it.
+  runtime.render(`<script>
+    var raw = null;
+    window.addEventListener("message", function (e) { if (e.ports && e.ports[0]) raw = e.ports[0]; });
+    marzi.call("probe.echo", { tag: "control" }).then(function () {
+      var send = function (id, params) { raw.postMessage({ jsonrpc: "2.0", id: id, method: "probe.echo", params: params }); };
+      send(1, JSON.parse('{"tag":"proto","__proto__":{"polluted":true}}'));
+      send(2, { tag: "big", blob: "x".repeat(1100000) });
+      var deep = {}; for (var i = 0; i < 40; i++) deep = { a: deep };
+      send(3, { tag: "deep", deep: deep });
+      send(4, { tag: "wide", wide: new Array(10001).fill(0) });
+      for (var n = 0; n < 200; n++) send(100 + n, { tag: "flood" });
+    });
+  <\/script>`, document.getElementById("slot"));
+</script>
+</body></html>

@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>handshake</title></head>
+<body>
+<div id="slot"></div><div id="sibling"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+
+  const runtime = createRuntime({
+    capabilities: [{ name: "probe.report", description: "checkpoint", handler: (p) => { log("REPORT " + JSON.stringify(p)); return true; } }],
+    onAudit: (e) => log(`AUDIT ${e.widgetId} ${e.method} ${e.decision}`),
+  });
+
+  // The honest widget also grabs the raw port (any in-frame listener sees the
+  // transfer) and sends a request carrying fields it hopes the host will read:
+  // a widgetId that is not its own, and a claimed origin. The host must
+  // derive identity from the port alone.
+  const widget = runtime.render(`<script>
+    var raw = null;
+    window.addEventListener("message", function (e) { if (e.ports && e.ports[0]) raw = e.ports[0]; });
+    marzi.call("probe.report", { at: "honest" }).then(function () {
+      raw.postMessage({ jsonrpc: "2.0", id: 999, method: "probe.report",
+        params: { at: "forged" }, widgetId: "someone-else", origin: "https://trusted.example" });
+    });
+  <\/script>`, document.getElementById("slot"));
+  log("RENDERED " + widget.id);
+
+  // A sibling frame that is NOT a widget: sandboxed, same shape, shouting the
+  // knock at the host and waiting for a port. It must never get one.
+  window.addEventListener("message", (e) => { if (e.data && e.data.sibling) log("SIBLING " + e.data.sibling); });
+  const sibling = document.createElement("iframe");
+  sibling.setAttribute("sandbox", "allow-scripts");
+  sibling.srcdoc = `<script>
+    window.addEventListener("message", function (e) {
+      if (e.ports && e.ports[0]) parent.postMessage({ sibling: "got-a-port" }, "*");
+    });
+    parent.postMessage({ marzi: "ready" }, "*");
+    setTimeout(function () { parent.postMessage({ marzi: "ready" }, "*"); parent.postMessage({ sibling: "knocked-twice" }, "*"); }, 300);
+  <\/script>`;
+  document.getElementById("sibling").appendChild(sibling);
+</script>
+</body></html>

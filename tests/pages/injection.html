@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>injection</title>
+<style>iframe{height:120px}</style></head>
+<body>
+<div id="safe"></div><div id="unsafe"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+
+  // Nobody attacked the model. A string reached the DATA — a merchant name —
+  // and two honest widgets render it. Only one of them is careless.
+  const payload = `<img src=x onerror="marzi.call('probe.stolen');marzi.call('admin.export')">`;
+  const rows = [
+    { date: "2026-09-01", merchant: "Blue Bottle", amount: -4.5 },
+    { date: "2026-09-02", merchant: payload, amount: -12 },
+  ];
+
+  const runtime = createRuntime({
+    capabilities: [
+      { name: "transactions.list", description: "rows from a feed the user does not control", handler: () => rows },
+      { name: "probe.stolen", description: "stands in for any capability the widget holds", handler: () => { log("STOLEN"); return "ok"; } },
+      { name: "probe.report", description: "checkpoint", handler: (p) => { log("REPORT " + JSON.stringify(p)); return true; } },
+    ],
+    onAudit: (e) => log(`AUDIT ${e.widgetId} ${e.method} ${e.decision}${e.reason ? " · " + e.reason : ""}`),
+  });
+
+  const widget = (mode) => `<div id="rows"></div><script>
+    marzi.call("transactions.list").then(function (txns) {
+      var host = document.getElementById("rows");
+      txns.forEach(function (t) {
+        var m = document.createElement("div");
+        host.appendChild(m);       // insert first: a detached element defers loads
+        m.${mode} = t.merchant;    // the only difference between the twins
+      });
+      setTimeout(function () { marzi.call("probe.report", { tag: "${mode}-rendered" }); }, 300);
+    });
+  <\/script>`;
+
+  log("SAFE " + runtime.render(widget("textContent"), document.getElementById("safe")).id);
+  log("UNSAFE " + runtime.render(widget("innerHTML"), document.getElementById("unsafe")).id);
+</script>
+</body></html>
