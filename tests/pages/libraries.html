@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>libraries</title></head>
+<body>
+<div id="slot"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+
+  const chartSrc = await fetch("/app/vendor/chart.umd.js").then((r) => r.text());
+  // A library whose source contains the closing script tag inside a string.
+  // Assembled by concatenation so THIS page's script is not ended by it.
+  const trapSrc = 'window.TRAP = "safe</scr' + 'ipt>still-safe";';
+
+  const runtime = createRuntime({
+    capabilities: [{ name: "probe.report", description: "checkpoint", handler: (p) => { log("REPORT " + JSON.stringify(p)); return true; } }],
+    libraries: [{ name: "chartjs", source: chartSrc }, { name: "trap", source: trapSrc }],
+    onWidgetFault: (f) => log("FAULT " + f.kind + " " + f.message),
+  });
+
+  runtime.render(`<canvas id="c" width="200" height="100"></canvas><script>
+    var chart = new Chart(document.getElementById("c"), {
+      type: "bar", data: { labels: ["a", "b"], datasets: [{ data: [1, 2] }] },
+      options: { animation: false, responsive: false } });
+    marzi.call("probe.report", { tag: "libs", chart: typeof Chart, points: chart.data.datasets[0].data.length,
+      pixels: document.getElementById("c").toDataURL().length, trap: window.TRAP });
+  <\/script>`, document.getElementById("slot"), { libs: ["chartjs", "trap"] });
+
+  // Host-side: an unregistered library name must throw at render, not die in the frame.
+  try { runtime.render("<div></div>", document.getElementById("slot"), { libs: ["nope"] }); log("THROW no"); }
+  catch (e) { log("THROW " + e.message); }
+</script>
+</body></html>
