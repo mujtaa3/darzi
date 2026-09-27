@@ -7,9 +7,8 @@ where it has no access to your page, your cookies, or the network — and can re
 your app only through capabilities you register by name.
 
 > **Status: early and incomplete.** The jail, the message channel, the
-> capability layer, persistence, refinement and the navigation warden work and
-> are demonstrated. The cross-engine attack suite does **not** exist yet. Not
-> usable in production.
+> capability layer, persistence, refinement and the navigation warden work, and
+> a cross-engine attack suite checks them. Not usable in production yet.
 
 ## Who decides what a widget may call
 
@@ -53,11 +52,13 @@ child frame tries to navigate itself somewhere with your data in the URL.
 Claims deliberately **not** made: "no network of any kind", "the message channel
 is the only channel", "write grants make hostile code safe".
 
-**Known residuals:** WebRTC on Firefox and Safari (the `webrtc` CSP directive
-is not implemented there — and current Chrome reports it unrecognized, which is
-being verified); DNS prefetch and preconnect hints; no CPU or memory isolation
-(a widget can spin); and nothing here checks that a widget's *numbers* are
-right — containment is not correctness. The self-navigation leak that used to
+**Known residuals:** **WebRTC, in every engine tested** — a widget can open a
+peer connection and reach a STUN server of its choosing; the `webrtc 'block'`
+CSP directive we set is honoured by none of Chrome, Safari/WebKit or Firefox
+(measured by the attack suite, which will flag the day that changes). DNS
+prefetch and preconnect hints; no CPU or memory isolation (a widget can spin);
+and nothing here checks that a widget's *numbers* are right — containment is
+not correctness. The self-navigation leak that used to
 head this list is closed by the warden (`demo/self-nav.html` shows the same
 attack, now stopped).
 
@@ -86,6 +87,21 @@ reaches the browser). The older single-purpose demos are under `demo/`:
 | `demo/jail-probe.html` | which browser APIs the jail actually blocks |
 | `demo/studio.html` | describe a widget, a model writes it, marzi runs it |
 
+## The attack suite
+
+```bash
+npx playwright install webkit firefox   # once; Chrome itself must be installed
+npm test                                # build, then every attack in three engines
+```
+
+Playwright Test across Chrome, WebKit and Firefox, one spec per class under
+`tests/attacks/` — identity, connectivity, navigation, handshake, messages,
+state, libraries, data-borne injection, WebRTC. Every negative is paired with a
+positive control in the same run, the witness is a server outside the browser
+(HTTP on `127.0.0.1:9999`, UDP on `:3478`), and retries are off so a flaky pass
+can never hide a leak. It is the release gate: nothing is tagged unless it is
+green.
+
 `python3 demo/exfil-listener.py` stands in for an attacker's collection server.
 It is the only trustworthy witness for whether data actually left the machine —
 a page cannot be trusted to report on itself.
@@ -101,6 +117,7 @@ a page cannot be trusted to report on itself.
 | `src/store.ts` | the storage contract (`WidgetStore`) and an in-memory store |
 | `prompts/` | the author and refine templates shipped for widget generation |
 | `app/` | Ledger, the reference host app |
+| `tests/` | the attack suite: specs, attack pages, the outside witness |
 
 Zero runtime dependencies. TypeScript is a devDependency; so is the Anthropic SDK,
 which only the demo server uses.

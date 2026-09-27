@@ -22,7 +22,9 @@ export interface Attack {
 }
 
 export async function openAttack(page: Page, name: string): Promise<Attack> {
-  await page.goto(`/tests/pages/${name}.html`, { waitUntil: "load" });
+  // `name` may carry a query: "webrtc?mode=control" → /tests/pages/webrtc.html?mode=control
+  const [file, query] = name.split("?");
+  await page.goto(`/tests/pages/${file}.html${query ? "?" + query : ""}`, { waitUntil: "load" });
 
   const log = () => page.evaluate(() => (window as unknown as { __log: string[] }).__log);
 

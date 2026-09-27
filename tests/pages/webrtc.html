@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>webrtc</title></head>
+<body>
+<div id="slot"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+  const mode = new URLSearchParams(location.search).get("mode") ?? "widget";
+
+  // WebRTC has its own network path: ICE gathering sends STUN binding requests
+  // to whatever server the page names, over UDP — a channel connect-src never
+  // covered. The witness listens on 127.0.0.1:3478. This script runs either
+  // inside a real widget (mode=widget) or in a plain frame with no CSP at all
+  // (mode=control); the caller loads the two modes separately so datagrams
+  // can be attributed.
+  const probe = (report) => `
+    var out = { tag: ${JSON.stringify(mode)}, constructed: false, error: null, candidates: 0, state: null, sent: false };
+    var pc = null;
+    function done() {
+      if (out.sent) return; out.sent = true;
+      out.state = pc ? pc.iceGatheringState : null;
+      ${report};
+    }
+    try {
+      pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:127.0.0.1:3478" }] });
+      out.constructed = true;
+      pc.onicecandidate = function (e) { if (e.candidate) out.candidates += 1; };
+      pc.onicegatheringstatechange = function () { if (pc.iceGatheringState === "complete") done(); };
+      pc.createDataChannel("x");
+      pc.createOffer().then(function (o) { return pc.setLocalDescription(o); })
+        .catch(function (e) { out.error = e.name + ": " + e.message; done(); });
+      setTimeout(done, 4000);
+    } catch (e) { out.error = e.name + ": " + e.message; done(); }`;
+
+  if (mode === "widget") {
+    const runtime = createRuntime({
+      capabilities: [{ name: "probe.report", description: "result", handler: (p) => { log("REPORT " + JSON.stringify(p)); return true; } }],
+      onWidgetFault: (f) => log("FAULT " + f.kind + " " + f.message),
+    });
+    runtime.render(`<script>${probe('marzi.call("probe.report", out)')}<\/script>`, document.getElementById("slot"));
+  } else {
+    window.addEventListener("message", (e) => { if (e.data && e.data.control) log("REPORT " + JSON.stringify(e.data.control)); });
+    const f = document.createElement("iframe");
+    f.srcdoc = `<script>${probe('parent.postMessage({ control: out }, "*")')}<\/script>`;
+    document.getElementById("slot").appendChild(f);
+  }
+</script>
+</body></html>
