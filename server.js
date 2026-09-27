@@ -268,7 +268,7 @@ const server = createServer(async (req, res) => {
   if (requested.endsWith("/")) requested += "index.html"; // directory index
   const filePath = join(ROOT, normalize(requested));
 
-  const SERVABLE = [join(ROOT, "demo"), join(ROOT, "dist"), join(ROOT, "app")];
+  const SERVABLE = [join(ROOT, "demo"), join(ROOT, "dist"), join(ROOT, "app"), join(ROOT, "tests")];
   if (!SERVABLE.some((dir) => filePath.startsWith(dir + "/"))) {
     res.writeHead(403).end("forbidden");
     return;

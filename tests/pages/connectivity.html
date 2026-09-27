@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>connectivity</title></head>
+<body>
+<div id="slot"></div><div id="control"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+  const WITNESS = "http://127.0.0.1:9999/witness";
+
+  // The jail: a widget tries every way a document can make a request. What
+  // it *thinks* happened is irrelevant; the witness counts what arrived.
+  const runtime = createRuntime({
+    capabilities: [{ name: "probe.report", description: "done", handler: () => { log("widget-done"); } }],
+  });
+  runtime.render(`<script>
+    var W = ${JSON.stringify(WITNESS)};
+    try { fetch(W + "?via=widget-fetch").catch(function () {}); } catch (e) {}
+    try { var x = new XMLHttpRequest(); x.open("GET", W + "?via=widget-xhr"); x.send(); } catch (e) {}
+    try { new WebSocket("ws://127.0.0.1:9999/witness?via=widget-websocket"); } catch (e) {}
+    try { navigator.sendBeacon(W + "?via=widget-beacon", "x"); } catch (e) {}
+    try { var i = new Image(); i.src = W + "?via=widget-img"; document.body.appendChild(i); } catch (e) {}
+    try { var l = document.createElement("link"); l.rel = "stylesheet"; l.href = W + "?via=widget-link"; document.head.appendChild(l); } catch (e) {}
+    setTimeout(function () { marzi.call("probe.report", {}); }, 200);
+  <\/script>`, document.getElementById("slot"));
+
+  // Control: a plain frame with no sandbox and no CSP makes two of the same
+  // requests. If these do not arrive, the witness is broken and "zero from the
+  // widget" would mean nothing.
+  window.addEventListener("message", (e) => { if (e.data && e.data.control) log("CONTROL " + e.data.control); });
+  const control = document.createElement("iframe");
+  control.srcdoc = `<script>
+    var W = ${JSON.stringify(WITNESS)};
+    var i = new Image(); i.src = W + "?via=control-img";
+    fetch(W + "?via=control-fetch").then(function () { parent.postMessage({ control: "fetch-arrived" }, "*"); });
+  <\/script>`;
+  document.getElementById("control").appendChild(control);
+</script>
+</body></html>

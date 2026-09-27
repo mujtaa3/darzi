@@ -134,6 +134,13 @@ ${body}
  * inherits its parent's policy container in addition to its own. A bare
  * `default-src 'none'` on the warden would therefore strip the widget of its
  * inline script and style. Same allowances, one extra directive.
+ *
+ * Strictly, the extra directive is belt and braces: `frame-src` falls back to
+ * `child-src`, which falls back to `default-src`, and the widget policy already
+ * says `default-src 'none'`. The attack suite's mutation check found this —
+ * removing only `frame-src 'none'` changed nothing. It stays because the
+ * warden's whole purpose should be legible in its policy, and because a future
+ * edit to WIDGET_CSP must not silently take the warden's teeth with it.
  */
 export const WARDEN_CSP = `${WIDGET_CSP}; frame-src 'none'`;
 
