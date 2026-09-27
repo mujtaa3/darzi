@@ -89,10 +89,17 @@ export const FRAME_STUB = `
     });
   });
 
+  // The host is TWO levels up. Directly above us sits the warden — an inert
+  // frame the host wraps around us so its frame-src 'none' governs our
+  // navigation. It carries no script and we never talk to it; the host
+  // addresses our window straight through it. (No backticks in this file's
+  // comments: the whole stub is one template literal.)
+  var host = parent.parent;
+
   // Listen BEFORE announcing ourselves, so we cannot miss the reply.
   window.addEventListener("message", function (event) {
     if (port) { return; }                     // accept exactly one port, ever
-    if (event.source !== parent) { return; }  // and only from our embedder
+    if (event.source !== host) { return; }    // and only from the host
     if (!event.data || event.data.marzi !== "port") { return; }
 
     var incoming = event.ports && event.ports[0];
@@ -121,6 +128,6 @@ export const FRAME_STUB = `
 
   // Announce on the party line. targetOrigin "*" is fine here precisely because
   // this message carries nothing: it is a knock on the door, not a payload.
-  parent.postMessage({ marzi: "ready" }, "*");
+  host.postMessage({ marzi: "ready" }, "*");
 })();
 `;

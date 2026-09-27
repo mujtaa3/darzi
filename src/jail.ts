@@ -1,17 +1,22 @@
 /**
  * The jail — how a widget's document is built so the browser confines it.
  *
- * Two independent mechanisms do the work, and it is worth keeping them apart in
- * your head because they govern different things:
+ * Three independent mechanisms do the work, and it is worth keeping them apart
+ * in your head because they govern different things:
  *
  *   sandbox attribute  →  IDENTITY. Withholding `allow-same-origin` gives the
  *                         frame an opaque origin, so the host DOM and cookies
  *                         are a stranger's property to it.
  *   CSP                →  CONNECTIVITY. `default-src 'none'` denies the whole
  *                         fetch family, so the frame cannot reach the network.
+ *   the warden         →  NAVIGATION. A frame navigating ITSELF is neither an
+ *                         identity nor a fetch question; only the embedder's
+ *                         `frame-src` governs it. We are not the embedder of
+ *                         the host page — so we insert a frame we do control
+ *                         between the host and the widget. See `warden()`.
  *
- * Neither substitutes for the other. Measured proof of both lives in
- * learnings/browser-platform.md.
+ * None substitutes for another. Measured proof lives in
+ * learnings/browser-platform.md and learnings/csp-verified.md.
  */
 
 import { FRAME_STUB } from "./frame-stub.js";
@@ -111,5 +116,55 @@ ${libs}</head>
 <body>
 ${body}
 </body>
+</html>`;
+}
+
+/**
+ * The warden's policy: everything the widget document is allowed, plus the one
+ * directive that governs the widget's navigation.
+ *
+ * `frame-src` is checked by the EMBEDDER of a frame against every navigation
+ * of that frame — including the frame navigating itself via `location=`,
+ * `location.replace`, a meta refresh or a form submit — and the block lands
+ * before any DNS or TCP leaves the machine (verified in Chrome, Firefox, WebKit
+ * and Safari; see learnings/csp-verified.md). `'none'` is the only safe value:
+ * any allowed origin would be a destination for stolen data.
+ *
+ * Why the rest of the widget's policy is repeated here: a `srcdoc` document
+ * inherits its parent's policy container in addition to its own. A bare
+ * `default-src 'none'` on the warden would therefore strip the widget of its
+ * inline script and style. Same allowances, one extra directive.
+ */
+export const WARDEN_CSP = `${WIDGET_CSP}; frame-src 'none'`;
+
+/** Escape a document so it can ride inside an HTML attribute (srcdoc). */
+function attributeSafe(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+/**
+ * Wrap a widget document in the warden: a frame we control, whose `frame-src
+ * 'none'` is what stops the widget from navigating itself away with data in
+ * the URL.
+ *
+ * The warden carries NO script. The handshake does not need one: the widget
+ * knocks on `parent.parent` (the host), and the host verifies and answers the
+ * widget's window directly through the cross-origin window allowlist
+ * (`frames[0]`, `postMessage`). An inert document has nothing to trust and
+ * nothing a widget could tamper with — the two frames have different opaque
+ * origins, so `parent` is a window the widget can address but never touch.
+ *
+ * `sandbox` flags are inherited by nested frames, so the warden must carry
+ * `allow-scripts` for the widget's scripts to run; it runs none of its own.
+ */
+export function warden(innerDocument: string): string {
+  return `<!doctype html>
+<html>
+<head>
+<meta http-equiv="Content-Security-Policy" content="${WARDEN_CSP}">
+<meta charset="utf-8">
+<style>html,body{margin:0;height:100%}iframe{display:block;width:100%;height:100%;border:0}</style>
+</head>
+<body><iframe sandbox="${SANDBOX_TOKENS}" allow="${FRAME_ALLOW}" referrerpolicy="${FRAME_REFERRER_POLICY}" srcdoc="${attributeSafe(innerDocument)}"></iframe></body>
 </html>`;
 }
