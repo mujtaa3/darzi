@@ -6,9 +6,23 @@ A user describes a widget, a model writes it, and marzi runs the result in a jai
 where it has no access to your page, your cookies, or the network — and can reach
 your app only through capabilities you register by name.
 
-> **Status: early and incomplete.** The jail, the message channel, and the
-> capability layer work and are demonstrated. Grants, persistence, approval, and
-> the attack suite do **not** exist yet. Not usable in production.
+> **Status: early and incomplete.** The jail, the message channel, the
+> capability layer, persistence and refinement work and are demonstrated. The
+> attack suite and the navigation fix below do **not** exist yet. Not usable in
+> production.
+
+## Who decides what a widget may call
+
+In 0.1.0, **registering a capability is the authorization.** Every capability
+you pass to `createRuntime` is callable by every widget you render — there are
+no per-widget grants, no consent step, and no read/write switch yet. Choose what
+to register the way you would choose what to put in a public API: if you would
+not want *any* widget calling it, do not register it. Descriptions carry no
+enforcement weight; only the handler's own validation does.
+
+Per-widget grants (a widget gets only what the user approved at creation), a
+consent flow with re-approval when a refinement asks for more, and a host-side
+read/write mask are designed and scheduled for the first release after 0.1.0.
 
 ## How it works
 
@@ -45,19 +59,22 @@ zero-config fix is planned.
 
 ```bash
 npm install
-npm run build          # demos load from dist/
-node demo/server.js    # → http://127.0.0.1:8000/demo/
+npm run build                      # the app and demos load from dist/
+node --env-file=.env server.js     # → http://127.0.0.1:8000/  (Ledger, the reference app)
 ```
 
-For the generation demo, export an API key first (it stays on the server, never
-in the browser): `export ANTHROPIC_API_KEY=…`
+`app/` is Ledger, a small finance app over a transactions CSV that embeds marzi:
+generate widgets, save them to a shelf, refine them, roll versions back. It is the
+reference for how a host wires capabilities, libraries, storage and the audit log.
+Generation needs `ANTHROPIC_API_KEY` in `.env` (read by the server only — it never
+reaches the browser). The older single-purpose demos are under `demo/`:
 
 | Demo | Shows |
 |---|---|
 | `demo/` | three attacks against the jail, before and after |
 | `demo/capabilities.html` | calling capabilities by name; refusals |
 | `demo/transactions.html` | a widget over real data, plus a hostile twin |
-| `demo/injection.html` | a payload arriving through the *data*, bounded by grants |
+| `demo/injection.html` | a payload arriving through the *data*, bounded by what the host registered |
 | `demo/self-nav.html` | the leak CSP cannot close — run the exfil listener |
 | `demo/nav-matrix.html` | sandbox × CSP × navigation, four ways |
 | `demo/jail-probe.html` | which browser APIs the jail actually blocks |
@@ -75,7 +92,9 @@ a page cannot be trusted to report on itself.
 | `src/index.ts` | `createRuntime`, the registry, the switchboard |
 | `src/rpc.ts` | JSON-RPC types and the inbound validator |
 | `src/frame-stub.ts` | the in-frame helper — **untrusted**, ergonomics only |
-| `prompts/` | the prompt template shipped for widget authors |
+| `src/store.ts` | the storage contract (`WidgetStore`) and an in-memory store |
+| `prompts/` | the author and refine templates shipped for widget generation |
+| `app/` | Ledger, the reference host app |
 
 Zero runtime dependencies. TypeScript is a devDependency; so is the Anthropic SDK,
 which only the demo server uses.
