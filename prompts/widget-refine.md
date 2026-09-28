@@ -30,6 +30,9 @@ development will fail here:
   images from anywhere. No CDNs.
 - **No storage.** `localStorage` and `sessionStorage` throw; no cookies.
 - **No access to the surrounding page**, no dialogs, no navigation.
+- **No peer-to-peer connections.** Do not use WebRTC (`RTCPeerConnection`
+  and related APIs); the host refuses to run any widget whose code mentions
+  them, anywhere — even in a comment.
 
 What you *do* have: plain HTML, inline `<style>` and `<script>`, the DOM,
 inline SVG, `<canvas>`, everything built into JavaScript — plus:

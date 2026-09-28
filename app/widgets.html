@@ -159,7 +159,18 @@
     // name would throw in render, and the declaration is what a saved widget
     // will carry in its record (rung 6).
     const libs = (widget.libs ?? []).filter((l) => LIBS.includes(l));
-    live = runtime.render(widget.html, $("slot"), { libs, id: durableId });
+    try {
+      live = runtime.render(widget.html, $("slot"), { libs, id: durableId });
+    } catch (err) {
+      // The screen (or an unknown library) refused it: say why, and keep a
+      // refused widget off the shelf.
+      live = null;
+      current = null;
+      $("save").hidden = true;
+      $("slot").innerHTML = `<div class="err">${esc(err.message)}</div>`;
+      statusEl.textContent = "widget refused";
+      return;
+    }
     logAudit(
       `rendered "${widget.title}" as ${durableId ?? live.id.slice(0, 8) + "… (ephemeral)"}` +
       ` libs=[${libs.join(", ")}]`, "ok");

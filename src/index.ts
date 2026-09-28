@@ -107,6 +107,24 @@ export interface Library {
   source: string;
 }
 
+/**
+ * The default screen: character sequences that make `render` refuse a widget
+ * whose body contains any of them, anywhere — code, comments and prose alike.
+ * Currently the WebRTC API names, because WebRTC is a network path no CSP
+ * setting closes in any engine we test (tests/attacks/webrtc.spec.ts).
+ *
+ * ⚠️ A screen for obvious misuse, NOT a containment control. It sees only the
+ * body at render time: text that reaches the widget later through capability
+ * data never passes through it, and JavaScript can reach names it assembles
+ * while running. The WebRTC residual in the README stands regardless.
+ */
+export const DEFAULT_SCREEN: readonly string[] = Object.freeze([
+  "RTCPeerConnection",
+  "RTCDataChannel",
+  "RTCSessionDescription",
+  "RTCIceCandidate",
+]);
+
 /** Per-render choices. */
 export interface RenderOptions {
   /**
@@ -185,6 +203,15 @@ export interface RuntimeOptions {
   capabilities: Capability[];
   /** Vendored libraries widgets may request by name at render. */
   libraries?: Library[];
+  /**
+   * Sequences whose presence anywhere in a widget body makes `render` refuse
+   * it (see DEFAULT_SCREEN for what this can and cannot do). This is the
+   * COMPLETE list — nothing is merged behind your back: extend with
+   * `[...DEFAULT_SCREEN, "x"]`, replace with your own, disable with `[]`.
+   * Matching is exact and case-sensitive. Library sources are not screened:
+   * they are the host's own vendored text.
+   */
+  screen?: readonly string[];
   /**
    * Where `marzi.saveState` / `marzi.loadState` land. Without one, those
    * calls are refused. The runtime hands this an opaque JSON string keyed by
@@ -266,6 +293,14 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       throw new Error(`capability name "${capability.name}" uses the reserved "marzi/" prefix`);
     }
     registry.set(capability.name, capability);
+  }
+
+  const screen = [...(options.screen ?? DEFAULT_SCREEN)];
+  for (const entry of screen) {
+    // An empty sequence would match every body and silently refuse them all.
+    if (typeof entry !== "string" || entry.length === 0) {
+      throw new Error("screen entries must be non-empty strings");
+    }
   }
 
   const libraries = new Map<string, string>();
@@ -504,6 +539,22 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   }
 
   function render(body: WidgetBody, container: HTMLElement, renderOptions?: RenderOptions): Widget {
+    // A saved widget renders under its record id — that continuity is what
+    // makes its stored state (and, from rung 5, its grants) find it again.
+    const id = renderOptions?.id ?? newWidgetId();
+
+    // The screen: refuse outright if the body contains a listed sequence
+    // anywhere. Refusal only — the body is never edited — and it happens
+    // before any DOM work, so a refused widget leaves no trace in the page.
+    const hit = screen.find((entry) => body.includes(entry));
+    if (hit !== undefined) {
+      audit({ widgetId: id, method: "(screen)", decision: "refused", reason: `body contains "${hit}"` });
+      throw new Error(
+        `widget refused by screen: body contains "${hit}" ` +
+          "(a screen for obvious misuse, not a containment control)",
+      );
+    }
+
     // Resolve library names before any DOM work, so a bad name costs nothing.
     const libSources = (renderOptions?.libs ?? []).map((name) => {
       const source = libraries.get(name);
@@ -513,9 +564,6 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       return source;
     });
 
-    // A saved widget renders under its record id — that continuity is what
-    // makes its stored state (and, from rung 5, its grants) find it again.
-    const id = renderOptions?.id ?? newWidgetId();
     const frame = document.createElement("iframe");
 
     // This frame is the WARDEN — ours, script-free — and the widget's own frame

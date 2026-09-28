@@ -28,6 +28,9 @@ habits from ordinary web development will fail here:
   unavailable.
 - **No access to the surrounding page.** `parent`, `top`, and `window.opener`
   give you nothing.
+- **No peer-to-peer connections.** Do not use WebRTC (`RTCPeerConnection`
+  and related APIs). The host refuses to run any widget whose code mentions
+  them, anywhere — even in a comment.
 - **No dialogs or navigation.** `alert`, `confirm`, `prompt`, `window.open`,
   form submission, and changing `location` are all unavailable or useless.
 

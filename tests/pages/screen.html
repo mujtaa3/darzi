@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>screen</title></head>
+<body>
+<div id="slot"></div>
+<script type="module">
+  import { createRuntime, DEFAULT_SCREEN } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+
+  const capabilities = [{ name: "probe.report", description: "checkpoint",
+    handler: (p) => { log("REPORT " + JSON.stringify(p)); return true; } }];
+  const onAudit = (e) => log(`AUDIT ${e.method} ${e.decision}${e.reason ? " · " + e.reason : ""}`);
+  const slot = document.getElementById("slot");
+
+  // Render, and record whether it threw and how many frames it left behind.
+  const attempt = (label, runtime, body) => {
+    const before = slot.querySelectorAll("iframe").length;
+    try { runtime.render(body, slot); log(`RENDERED ${label}`); }
+    catch (e) { log(`THROW ${label} · ${e.message} · frames+${slot.querySelectorAll("iframe").length - before}`); }
+  };
+
+  log("DEFAULT " + JSON.stringify(DEFAULT_SCREEN));
+
+  // Default list. The listed sequence appears only as inert prose — the screen
+  // matches characters anywhere, so it must refuse without anything running.
+  const standard = createRuntime({ capabilities, onAudit });
+  attempt("default-hit", standard, `<p>This widget mentions RTCPeerConnection in plain text.</p>`);
+  // Control: a clean body renders and reaches the switchboard.
+  attempt("default-clean", standard, `<script>marzi.call("probe.report", { tag: "clean" });<\/script>`);
+
+  // A host's own list REPLACES the default — nothing merged behind its back.
+  const custom = createRuntime({ capabilities, onAudit, screen: ["forbidden-word"] });
+  attempt("custom-hit", custom, `<p>forbidden-word</p>`);
+  attempt("custom-without-default", custom, `<p>RTCPeerConnection</p>`);
+
+  // Disabled.
+  const off = createRuntime({ capabilities, onAudit, screen: [] });
+  attempt("off", off, `<p>RTCPeerConnection</p>`);
+
+  // An empty sequence would match everything: refused at setup.
+  try { createRuntime({ capabilities, screen: [""] }); log("SETUP no-throw"); }
+  catch (e) { log("SETUP " + e.message); }
+
+  log("DONE");
+</script>
+</body></html>
