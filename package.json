@@ -18,7 +18,7 @@
     "build": "tsc",
     "watch": "tsc --watch",
     "clean": "rm -rf dist",
-    "test": "npm run build && playwright test -c tests/playwright.config.ts"
+    "test": "playwright test -c tests/playwright.config.ts"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

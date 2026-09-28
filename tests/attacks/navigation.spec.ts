@@ -23,6 +23,7 @@ test("a widget cannot navigate itself to the witness", async ({ page, witness },
 
   expect(witness.arrived("control-")).toEqual(["control-href", "control-meta", "control-replace"]);
   expect(witness.arrived("runtime-"), "runtime widgets that arrived").toEqual([]);
+  expect(await attack.logged("fault:"), "runtime widgets must start, not fault").toEqual([]);
 
   // Documented aftermath per engine: WebKit and Firefox keep the blocked
   // document alive; Chrome replaces it with its blocked-page.

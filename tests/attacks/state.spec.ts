@@ -11,7 +11,7 @@ test("saved state comes back to its own widget only, cleaned and capped", async 
 
   expect(by["load-A"]).toMatchObject({ n: 42, protoKey: false, polluted: false });
   expect(by["load-B"]).toMatchObject({ value: null });
-  expect(String(by["big"]?.err)).toContain("state too large");
+  expect(String(by["big"]?.err)).toContain("state too large (100010 > 64000)");
   expect(String(by["cycle"]?.err)).toContain("state rejected");
 
   const audits = await attack.logged("AUDIT ");

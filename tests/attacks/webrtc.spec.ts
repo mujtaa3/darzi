@@ -36,6 +36,11 @@ test("webrtc 'block' — measured against a UDP witness", async ({ page, witness
     .toBeGreaterThan(0);
   const controlUdp = witness.udp();
 
+  // Tear the control down BEFORE resetting, so none of its retransmits can be
+  // counted as the widget's.
+  await page.goto("about:blank");
+  await page.waitForTimeout(800);
+
   // Then the widget, on a fresh page load, from zero.
   witness.reset();
   attack = await openAttack(page, "webrtc?mode=widget");
@@ -48,7 +53,15 @@ test("webrtc 'block' — measured against a UDP witness", async ({ page, witness
   info.annotations.push({ type: "webrtc", description: summary });
   console.log(`[${info.project.name}] ${summary}`);
 
+  // Structural: the widget document really carries the directive. Without
+  // this, deleting it from WIDGET_CSP would leave a "leaks" pin green.
+  expect(String(widget?.policy), "widget CSP").toContain("webrtc 'block'");
+  // And the widget really tried: a probe that never constructed a peer
+  // connection would make "0 datagrams" meaningless.
+  expect(widget?.constructed, "widget constructed an RTCPeerConnection").toBe(true);
+
   const expected = EXPECTED[info.project.name];
+  expect(expected, `a pinned expectation for ${info.project.name}`).toMatch(/^(blocked|leaks)$/);
   if (expected === "blocked") expect(widgetUdp, "datagrams from a widget").toBe(0);
   if (expected === "leaks") expect(widgetUdp, "documented residual: engine does not honour webrtc 'block'").toBeGreaterThan(0);
 });
