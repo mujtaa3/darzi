@@ -10,6 +10,16 @@ your app only through capabilities you register by name.
 > capability layer, persistence, refinement and the navigation warden work, and
 > a cross-engine attack suite checks them. Not usable in production yet.
 
+**The screen.** `render` refuses — throws, and reports the refusal to
+`onAudit` — any widget whose body contains a listed character sequence
+anywhere, in code, comments or prose. The default list (`DEFAULT_SCREEN`) is
+the WebRTC API names; `createRuntime({ screen })` takes the complete list,
+so extend it with `[...DEFAULT_SCREEN, "x"]`, replace it, or pass `[]` to turn
+it off. It is a screen for obvious misuse, **not** a containment control: it
+sees only the body at render time, so text that reaches a widget later through
+capability data never passes through it, and JavaScript can reach names it
+builds while running. The WebRTC residual above stands.
+
 ## Who decides what a widget may call
 
 In 0.1.0, **registering a capability is the authorization.** Every capability
