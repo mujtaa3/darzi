@@ -19,6 +19,7 @@ export default defineConfig({
   testDir: "./attacks",
   timeout: 30_000,
   retries: 0,
+  forbidOnly: true,
   workers: 1,
   reporter: [["list"]],
   use: {
@@ -26,12 +27,14 @@ export default defineConfig({
     viewport: { width: 1100, height: 1400 },
   },
   webServer: {
-    command: "node server.js",
+    // Build first: running Playwright directly must never test a stale dist/.
+    command: "npm run build && node server.js",
     cwd: REPO,
-    port: 8009,
+    // Readiness is one of OUR pages answering, not just "something holds the port".
+    url: "http://127.0.0.1:8009/tests/pages/identity.html",
     env: { PORT: "8009" },
     reuseExistingServer: false,
-    timeout: 15_000,
+    timeout: 30_000,
   },
   projects: [
     { name: "chrome", use: { ...devices["Desktop Chrome"], channel: "chrome" } },

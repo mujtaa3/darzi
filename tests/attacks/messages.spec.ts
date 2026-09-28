@@ -29,8 +29,10 @@ test("params are rebuilt, bounded, and rate-limited at the boundary", async ({ p
   expect(echoes.map((e) => e.tag)).not.toContain("deep");
   expect(echoes.map((e) => e.tag)).not.toContain("wide");
 
-  // The flood: 200 messages, budget 120 — audited exactly once, and the
-  // handler saw fewer floods than were sent.
+  // The flood: every port message counts against 120 per window, refused ones
+  // included (the rate check runs before parsing). 1 control + 4 shape probes
+  // + 200 floods → exactly 115 floods reach the handler, and the crossing is
+  // audited exactly once.
   expect(audits.filter((a) => a.startsWith("(rate limit)")).length).toBe(1);
-  expect(echoes.filter((e) => e.tag === "flood").length).toBeLessThan(200);
+  expect(echoes.filter((e) => e.tag === "flood").length).toBe(115);
 });

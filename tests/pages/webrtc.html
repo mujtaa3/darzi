@@ -15,7 +15,8 @@
   // (mode=control); the caller loads the two modes separately so datagrams
   // can be attributed.
   const probe = (report) => `
-    var out = { tag: ${JSON.stringify(mode)}, constructed: false, error: null, candidates: 0, state: null, sent: false };
+    var meta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+    var out = { tag: ${JSON.stringify(mode)}, policy: meta ? meta.content : "", constructed: false, error: null, candidates: 0, state: null, sent: false };
     var pc = null;
     function done() {
       if (out.sent) return; out.sent = true;

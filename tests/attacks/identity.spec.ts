@@ -16,6 +16,10 @@ test("a widget cannot see the host page, its cookies, or storage", async ({ page
 
   const rows = Object.fromEntries((await attack.reports()).map((r) => [r.api, r]));
 
+  // The one row that must SUCCEED: proves the probe can report "allowed" at
+  // all, and asserts the mechanism directly — the widget's origin is opaque.
+  expect(rows["self.origin"], "self.origin").toMatchObject({ verdict: "allowed", detail: "null" });
+
   // Host DOM and URL: must throw everywhere.
   expect(rows["parent.document"]?.verdict, "parent.document").toBe("blocked");
   expect(rows["top.location.href"]?.verdict, "top.location.href").toBe("blocked");
