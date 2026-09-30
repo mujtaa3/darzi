@@ -1,0 +1,34 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>results</title></head>
+<body>
+<div id="slot"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+
+  // One capability returns plain data (the control); two return values that
+  // structured clone cannot copy — the realistic developer slips.
+  const runtime = createRuntime({
+    capabilities: [
+      { name: "probe.plain", description: "cloneable", handler: () => ({ rows: [1, 2, 3] }) },
+      { name: "probe.callback", description: "object carrying a function", handler: () => ({ total: 3, format: (n) => "$" + n }) },
+      { name: "probe.response", description: "a fetch Response: the forgot-.json() slip", handler: () => new Response("{}") },
+      { name: "probe.report", description: "checkpoint", handler: (p) => { log("REPORT " + JSON.stringify(p)); return true; } },
+    ],
+    onAudit: (e) => log(`AUDIT ${e.method} ${e.decision}${e.reason ? " · " + e.reason : ""}`),
+  });
+
+  // The widget times each call and reports how it settled.
+  runtime.render(`<script>
+    function time(name) {
+      var t0 = performance.now();
+      return marzi.call(name).then(
+        function (v) { return { name: name, ok: true, ms: Math.round(performance.now() - t0), value: v }; },
+        function (e) { return { name: name, ok: false, ms: Math.round(performance.now() - t0), error: e.message }; });
+    }
+    Promise.all([time("probe.plain"), time("probe.callback"), time("probe.response")])
+      .then(function (results) { marzi.call("probe.report", { results: results }); });
+  <\/script>`, document.getElementById("slot"));
+</script>
+</body></html>

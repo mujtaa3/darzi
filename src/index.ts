@@ -529,6 +529,25 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         return fail(request.id, RPC.TIMEOUT, "capability timed out");
       }
 
+      // The reply crosses the port by structured clone, and some values cannot
+      // be cloned — functions, Promises, a fetch Response. postMessage would
+      // throw later, outside this try, after the audit already said
+      // "dispatched", and the widget would wait out the stub's backstop. So
+      // prove the result can be sent here, where the capability's name is at
+      // hand and the refusal can be audited. Costs one extra copy per result.
+      try {
+        structuredClone(outcome);
+      } catch (error) {
+        console.error(`[marzi] capability "${request.method}" returned a value that cannot be sent to a widget:`, error);
+        audit({
+          widgetId: widget.id,
+          method: request.method,
+          decision: "refused",
+          reason: "result not cloneable",
+        });
+        return fail(request.id, RPC.INTERNAL_ERROR, "capability returned a value that can't be sent to a widget");
+      }
+
       return ok(request.id, outcome);
     } catch (error) {
       // Never hand the widget a raw error: messages can carry internal detail.
@@ -601,9 +620,13 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     };
 
     channel.port1.onmessage = (event: MessageEvent): void => {
-      void handleMessage(widget, event.data).then((response) => {
-        if (response !== null) channel.port1.postMessage(response);
-      });
+      void handleMessage(widget, event.data)
+        .then((response) => {
+          if (response !== null) channel.port1.postMessage(response);
+        })
+        .catch((error: unknown) => {
+          console.error(`[marzi] reply to widget ${widget.id} failed:`, error);
+        });
     };
 
     // The handshake. We listen on the party line for the widget's knock, verify
