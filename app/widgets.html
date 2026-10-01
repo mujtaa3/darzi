@@ -103,9 +103,11 @@
     libraries,
     // Widget state lands on the server, keyed by the widget's durable id —
     // the runtime hands us an opaque JSON string it already sanitized/capped.
+    // The signal aborts when the runtime gives up (deadline or destroy);
+    // passing it to fetch cancels the request instead of letting it land late.
     store: {
-      getState: (id) => api(`/api/widgets/${id}/state`).then((r) => r.json),
-      putState: (id, json) => api(`/api/widgets/${id}/state`, { json }).then(() => {}),
+      getState: (id, signal) => api(`/api/widgets/${id}/state`, undefined, undefined, signal).then((r) => r.json),
+      putState: (id, json, signal) => api(`/api/widgets/${id}/state`, { json }, undefined, signal).then(() => {}),
     },
     onAudit: (e) => logAudit(
       `${e.method} — ${e.decision}${e.reason ? ` (${e.reason})` : ""}`,
@@ -256,6 +258,15 @@
     const id = e.target.closest("[data-id]")?.dataset.id;
     if (!act || !id) return;
     if (act === "delete") {
+      // Destroy first: a save still in flight from the displayed widget would
+      // otherwise land after the delete and recreate its state.
+      if (live && live.id === id) {
+        live.destroy();
+        live = null;
+        loaded = null;
+        $("slot").innerHTML = "";
+        $("refinebar").hidden = true;
+      }
       await api(`/api/widgets/${id}`, undefined, "DELETE");
       await showShelf();
       return;

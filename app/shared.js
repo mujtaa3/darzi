@@ -34,12 +34,15 @@ export function nav(active) {
  * Fetch JSON from the app's own backend; throw the server's error message.
  * No body and no method → GET. A body → POST. Method overrides (e.g. DELETE).
  */
-export async function api(path, body, method) {
-  const res = await fetch(path, body === undefined && method === undefined ? undefined : {
+export async function api(path, body, method, signal) {
+  const init = body === undefined && method === undefined ? {} : {
     method: method ?? "POST",
     headers: { "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  };
+  // `signal` lets a caller cancel the request outright (the marzi store
+  // contract hands one to getState/putState).
+  const res = await fetch(path, { ...init, signal });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? `${res.status} on ${path}`);
   return data;

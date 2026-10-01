@@ -66,14 +66,24 @@ export interface WidgetSummary {
  * before `putState` and parses after `getState`, so implementations store
  * bytes and never re-encode — round-trip fidelity is the runtime's problem,
  * solved once, not every store's.
+ *
+ * The state methods receive a `signal`, aborted when the runtime stops
+ * waiting: the call exceeded `callTimeoutMs`, or the widget was destroyed.
+ * Honouring it is optional, and the runtime stops waiting either way — but a
+ * store backed by a network should pass it on to `fetch`, so the request is
+ * actually cancelled rather than finishing into a void.
+ *
+ * What no signal can do is recall a write the backend has already applied.
+ * So destroy a widget BEFORE deleting its state, or a save already in flight
+ * can recreate the state you just removed.
  */
 export interface WidgetStore {
   list(): Promise<WidgetSummary[]>;
   get(id: string): Promise<WidgetRecord | null>;
   put(record: WidgetRecord): Promise<void>;
   delete(id: string): Promise<void>;
-  getState(widgetId: string): Promise<string | null>;
-  putState(widgetId: string, json: string): Promise<void>;
+  getState(widgetId: string, signal?: AbortSignal): Promise<string | null>;
+  putState(widgetId: string, json: string, signal?: AbortSignal): Promise<void>;
 }
 
 /** The slice of the store the runtime itself consumes (for marzi.saveState). */

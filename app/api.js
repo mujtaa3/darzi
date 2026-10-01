@@ -336,6 +336,8 @@ export async function handleFinanceApi(url, method, body) {
       return { status: 200, body: { json: widgets.state[id] ?? null } };
     }
     if (isState && method === "POST") {
+      // State belongs to a record; never let a late write resurrect it.
+      if (!widgets.records[id]) return { status: 404, body: { error: "no such widget" } };
       const { json } = body ?? {};
       if (typeof json !== "string" || json.length > MAX_STATE) throw new Error("bad state payload");
       widgets.state[id] = json;
