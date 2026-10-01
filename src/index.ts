@@ -312,6 +312,11 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     if (capability.name.startsWith("marzi/")) {
       throw new Error(`capability name "${capability.name}" uses the reserved "marzi/" prefix`);
     }
+    // A second entry would silently replace the first, and which handler ran
+    // would depend on array order.
+    if (registry.has(capability.name)) {
+      throw new Error(`capability "${capability.name}" is registered twice`);
+    }
     registry.set(capability.name, capability);
   }
 
@@ -325,8 +330,14 @@ export function createRuntime(options: RuntimeOptions): Runtime {
 
   const libraries = new Map<string, string>();
   for (const lib of options.libraries ?? []) {
+    if (libraries.has(lib.name)) {
+      throw new Error(`library "${lib.name}" is registered twice`);
+    }
     libraries.set(lib.name, lib.source);
   }
+
+  /** Ids of widgets currently rendered and not yet destroyed. */
+  const liveIds = new Set<string>();
 
   /**
    * The switchboard, in its rung-3 form: validate, look up, dispatch.
@@ -596,6 +607,14 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     // makes its stored state (and, from rung 5, its grants) find it again.
     const id = renderOptions?.id ?? newWidgetId();
 
+    // One live widget per id. Two frames under one id would share one state
+    // slot and be indistinguishable in the audit, so the host could no longer
+    // tell which widget did what. Re-rendering a saved widget (refine,
+    // rollback, reload) means destroying the old one first.
+    if (liveIds.has(id)) {
+      throw new Error(`widget "${id}" is already rendered — destroy it before rendering it again`);
+    }
+
     // The screen: refuse outright if the body contains a listed sequence
     // anywhere. Refusal only — the body is never edited — and it happens
     // before any DOM work, so a refused widget leaves no trace in the page.
@@ -704,10 +723,20 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     // document, so everything above is in place before any widget code runs.
     container.appendChild(frame);
 
+    // Registered last, so a render that threw above never holds the id.
+    liveIds.add(id);
+    let destroyed = false;
+
     return {
       id,
       frame,
       destroy(): void {
+        // Idempotent. A second call on a stale handle must not release an id
+        // that a newer widget has since taken.
+        if (destroyed) return;
+        destroyed = true;
+        liveIds.delete(id);
+
         // Abort first: any call still in flight gets its signal, so handlers
         // that honour it release their work instead of finishing into a void.
         widget.lifetime.abort(new DOMException("widget destroyed", "AbortError"));

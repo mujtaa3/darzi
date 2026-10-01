@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>ids</title></head>
+<body>
+<div id="slot"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+  const attempt = (label, fn) => {
+    try { fn(); log(`OK ${label}`); } catch (e) { log(`THROW ${label} · ${e.message}`); }
+  };
+  const cap = (name) => ({ name, description: "test", handler: () => true });
+  const slot = document.getElementById("slot");
+  const frames = () => slot.querySelectorAll(":scope > iframe").length;
+
+  // Setup: a name registered twice is refused, not silently overwritten.
+  attempt("dup-capability", () => createRuntime({ capabilities: [cap("a.read"), cap("a.read")] }));
+  attempt("dup-library", () => createRuntime({ capabilities: [],
+    libraries: [{ name: "lib", source: "1" }, { name: "lib", source: "2" }] }));
+  attempt("distinct-names", () => createRuntime({ capabilities: [cap("a.read"), cap("b.read")],
+    libraries: [{ name: "x", source: "1" }, { name: "y", source: "2" }] }));
+
+  // One live widget per id.
+  const runtime = createRuntime({ capabilities: [cap("probe.ok")] });
+  let first;
+  attempt("render-first", () => { first = runtime.render("<p>first</p>", slot, { id: "wid-1" }); });
+  attempt("render-duplicate", () => runtime.render("<p>dup</p>", slot, { id: "wid-1" }));
+  log("FRAMES " + frames());
+
+  // Destroy releases the id (control) …
+  attempt("render-after-destroy", () => { first.destroy(); runtime.render("<p>second</p>", slot, { id: "wid-1" }); });
+  // … and a second destroy on the stale handle must NOT release it again: the
+  // second widget still holds "wid-1", so a third render must still be refused.
+  attempt("stale-destroy", () => first.destroy());
+  attempt("render-while-second-live", () => runtime.render("<p>third</p>", slot, { id: "wid-1" }));
+  log("FRAMES " + frames());
+
+  // Minted ids never collide.
+  attempt("minted-1", () => runtime.render("<p>m1</p>", slot));
+  attempt("minted-2", () => runtime.render("<p>m2</p>", slot));
+  log("FRAMES " + frames());
+  log("DONE");
+</script>
+</body></html>
