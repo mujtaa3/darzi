@@ -41,6 +41,15 @@
     try { await marzi.saveState({ big: "x".repeat(100000) }); } catch (e) { await marzi.call("probe.report", { tag: "big", err: e.message }); }
     try { var a = {}; a.self = a; await marzi.saveState(a); } catch (e) { await marzi.call("probe.report", { tag: "cycle", err: e.message }); }`, "wid-C");
   await waitFor("cycle"); w.destroy();
+
+  // The cap counts UTF-8 bytes. "\u20ac" (the euro sign) is 1 UTF-16 code
+  // unit but 3 bytes, so the two measures disagree by 3x.
+  w = run(`
+    try { await marzi.saveState({ s: "\u20ac".repeat(30000) }); await marzi.call("probe.report", { tag: "euro-over", saved: true }); }
+    catch (e) { await marzi.call("probe.report", { tag: "euro-over", err: e.message }); }
+    try { await marzi.saveState({ s: "\u20ac".repeat(20000) }); await marzi.call("probe.report", { tag: "euro-under", saved: true }); }
+    catch (e) { await marzi.call("probe.report", { tag: "euro-under", err: e.message }); }`, "wid-E");
+  await waitFor("euro-under"); w.destroy();
   log("DONE");
 </script>
 </body></html>

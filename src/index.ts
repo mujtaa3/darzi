@@ -219,9 +219,10 @@ export interface RuntimeOptions {
    */
   store?: StateStore;
   /**
-   * Ceiling on one widget's serialized state, in JSON characters.
-   * Default 64 000. State is widget-authored and therefore hostile; the cap
-   * is what stops a widget using the host's storage as a landfill.
+   * Ceiling on one widget's serialized state, in UTF-8 bytes of its JSON —
+   * the size it has on the wire to a store, and what most backends account
+   * in. Default 64 000. State is widget-authored and therefore hostile; the
+   * cap is what stops a widget using the host's storage as a landfill.
    */
   stateLimitBytes?: number;
   /** Called for every inbound call, allowed or not. Must not throw. */
@@ -266,6 +267,9 @@ interface LiveWidget {
 
 /** Distinguishes "the runtime gave up" from a value a handler actually returned. */
 const ABANDONED = Symbol("abandoned");
+
+/** Measures serialized state in the unit storage is accounted in. */
+const UTF8 = new TextEncoder();
 
 /**
  * Wait for `work`, but stop waiting the moment `signal` aborts — whether or
@@ -442,8 +446,12 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       } catch {
         return refuse("state rejected: not JSON-serializable");
       }
-      if (json.length > stateLimit) {
-        return refuse(`state too large (${json.length} > ${stateLimit})`);
+      // Bytes, not string.length: a JS string counts UTF-16 code units, which
+      // undercounts non-Latin text and emoji by up to 3x against what a store
+      // actually holds. The encode is bounded by the params text cap above.
+      const bytes = UTF8.encode(json).length;
+      if (bytes > stateLimit) {
+        return refuse(`state too large (${bytes} bytes > ${stateLimit})`);
       }
 
       audit({ widgetId: widget.id, method, decision: "dispatched" });
