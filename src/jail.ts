@@ -143,8 +143,14 @@ ${body}
  * removing only `frame-src 'none'` changed nothing. It stays because the
  * warden's whole purpose should be legible in its policy, and because a future
  * edit to WIDGET_CSP must not silently take the warden's teeth with it.
+ *
+ * That is also why it comes FIRST. When a policy names the same directive
+ * twice, the browser keeps the first and ignores the rest. Appended, this one
+ * would lose to any `frame-src` later added to WIDGET_CSP (measured: with
+ * `frame-src *` there, widgets navigated themselves to the witness in every
+ * engine). First, it wins whatever WIDGET_CSP says.
  */
-export const WARDEN_CSP = `${WIDGET_CSP}; frame-src 'none'`;
+export const WARDEN_CSP = `frame-src 'none'; ${WIDGET_CSP}`;
 
 /** Escape a document so it can ride inside an HTML attribute (srcdoc). */
 function attributeSafe(text: string): string {
