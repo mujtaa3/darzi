@@ -8,32 +8,46 @@
   const log = (s) => window.__log.push(s);
   const WITNESS = "http://127.0.0.1:9999/witness";
 
-  // The jail: a widget tries every way a document can make a request. What
-  // it *thinks* happened is irrelevant; the witness counts what arrived.
+  // Every way we probe for a document to make a request, labelled
+  // `<side>-<probe>`, with the CSP directive that decides each one. This one
+  // function runs in the jailed widget AND in the free control frame, so a
+  // probe that never fires is missing from the control too — it cannot pass
+  // for a blocked one. What the widget thinks happened is irrelevant; the
+  // witness counts what arrived.
+  function probe(W, side) {
+    function via(name) { return W + "?via=" + side + "-" + name; }
+    // connect-src: not set, so default-src 'none'
+    try { fetch(via("fetch")).catch(function () {}); } catch (e) {}
+    try { var x = new XMLHttpRequest(); x.open("GET", via("xhr")); x.send(); } catch (e) {}
+    try { new WebSocket(via("websocket").replace(/^http/, "ws")); } catch (e) {}
+    try { navigator.sendBeacon(via("beacon"), "x"); } catch (e) {}
+    // the four the widget policy re-allows: img-src, style-src, script-src, font-src
+    try { var i = document.createElement("img"); i.src = via("img"); document.body.appendChild(i); } catch (e) {}
+    try { var l = document.createElement("link"); l.rel = "stylesheet"; l.href = via("link"); document.head.appendChild(l); } catch (e) {}
+    try { var s = document.createElement("script"); s.src = via("script"); document.head.appendChild(s); } catch (e) {}
+    // FontFace, not an @font-face rule: CSS fonts load only when rendered text
+    // uses them, and a probe that never fires reads as blocked.
+    try { new FontFace("x", "url(" + via("font") + ")").load().catch(function () {}); } catch (e) {}
+    // object-src and frame-src: not set, so default-src 'none'
+    try { var o = document.createElement("object"); o.data = via("object"); document.body.appendChild(o); } catch (e) {}
+    try { var f = document.createElement("iframe"); f.src = via("iframe"); document.body.appendChild(f); } catch (e) {}
+  }
+
+  // The jail.
   const runtime = createRuntime({
     capabilities: [{ name: "probe.report", description: "done", handler: () => { log("widget-done"); } }],
   });
   runtime.render(`<script>
-    var W = ${JSON.stringify(WITNESS)};
-    try { fetch(W + "?via=widget-fetch").catch(function () {}); } catch (e) {}
-    try { var x = new XMLHttpRequest(); x.open("GET", W + "?via=widget-xhr"); x.send(); } catch (e) {}
-    try { new WebSocket("ws://127.0.0.1:9999/witness?via=widget-websocket"); } catch (e) {}
-    try { navigator.sendBeacon(W + "?via=widget-beacon", "x"); } catch (e) {}
-    try { var i = new Image(); i.src = W + "?via=widget-img"; document.body.appendChild(i); } catch (e) {}
-    try { var l = document.createElement("link"); l.rel = "stylesheet"; l.href = W + "?via=widget-link"; document.head.appendChild(l); } catch (e) {}
+    (${probe})(${JSON.stringify(WITNESS)}, "widget");
     setTimeout(function () { marzi.call("probe.report", {}); }, 200);
   <\/script>`, document.getElementById("slot"));
 
-  // Control: a plain frame with no sandbox and no CSP makes two of the same
-  // requests. If these do not arrive, the witness is broken and "zero from the
-  // widget" would mean nothing.
-  window.addEventListener("message", (e) => { if (e.data && e.data.control) log("CONTROL " + e.data.control); });
+  // Control: the same probes from a plain frame with no sandbox and no CSP.
+  // Every one must arrive, or "zero from the widget" would mean nothing. The
+  // explicit <body> matters: a script parsed before it would find
+  // document.body null, and the probes that insert an element would throw.
   const control = document.createElement("iframe");
-  control.srcdoc = `<script>
-    var W = ${JSON.stringify(WITNESS)};
-    var i = new Image(); i.src = W + "?via=control-img";
-    fetch(W + "?via=control-fetch").then(function () { parent.postMessage({ control: "fetch-arrived" }, "*"); });
-  <\/script>`;
+  control.srcdoc = `<body><script>(${probe})(${JSON.stringify(WITNESS)}, "control");<\/script></body>`;
   document.getElementById("control").appendChild(control);
 </script>
 </body></html>
