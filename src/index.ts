@@ -267,6 +267,26 @@ interface LiveWidget {
 /** Distinguishes "the runtime gave up" from a value a handler actually returned. */
 const ABANDONED = Symbol("abandoned");
 
+/**
+ * Wait for `work`, but stop waiting the moment `signal` aborts — whether or
+ * not the work itself honours the signal. Returns ABANDONED in that case.
+ */
+function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T | typeof ABANDONED> {
+  // An already-aborted signal never fires "abort" again, so answer now.
+  if (signal.aborted) return Promise.resolve(ABANDONED);
+  return Promise.race([
+    work,
+    new Promise<typeof ABANDONED>((resolve) => {
+      signal.addEventListener("abort", () => resolve(ABANDONED), { once: true });
+    }),
+  ]);
+}
+
+/** Why the runtime gave up on a call: for the audit, never for the widget. */
+function abandonReason(widget: LiveWidget): string {
+  return widget.lifetime.signal.aborted ? "widget destroyed" : "timed out";
+}
+
 function newWidgetId(): string {
   // randomUUID needs a secure context; localhost qualifies, but fall back so a
   // plain-http staging box does not throw.
@@ -351,22 +371,44 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   const stateLimit = options.stateLimitBytes ?? 64_000;
 
   /**
+   * The deadline every call that leaves the switchboard gets — capability
+   * handlers and store calls alike: aborted after `callTimeoutMs`, or the
+   * moment the widget is destroyed.
+   */
+  function callSignal(widget: LiveWidget): AbortSignal {
+    return AbortSignal.any([
+      widget.lifetime.signal,
+      AbortSignal.timeout(options.callTimeoutMs ?? 30_000),
+    ]);
+  }
+
+  /**
    * The widget's own settings, through the switchboard.
    *
    * State is widget-authored, so it crosses the trust boundary like params do:
    * sanitized (prototype keys stripped, shape bounded), then serialized ONCE
    * here — the store receives an opaque JSON string, and load parses it back.
    * JSON.stringify also throws on cycles, which lands in the refusal path.
+   *
+   * Store calls get the same deadline and race as capability handlers: the
+   * store is host code we do not control, and a hung one must not hold the
+   * call forever, nor finish a write for a widget that has been destroyed.
+   * The signal is handed to the store so a networked one can cancel for real.
    */
   async function handleState(
     widget: LiveWidget,
     id: RpcId,
     method: string,
     rawParams: unknown,
+    signal: AbortSignal,
   ): Promise<RpcResponse> {
     const refuse = (reason: string): RpcResponse => {
       audit({ widgetId: widget.id, method, decision: "refused", reason });
       return fail(id, RPC.INVALID_REQUEST, reason);
+    };
+    const abandon = (): RpcResponse => {
+      audit({ widgetId: widget.id, method, decision: "refused", reason: abandonReason(widget) });
+      return fail(id, RPC.TIMEOUT, "state operation timed out");
     };
 
     if (!options.store) return refuse("no store configured");
@@ -374,7 +416,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     try {
       if (method === "marzi/loadState") {
         audit({ widgetId: widget.id, method, decision: "dispatched" });
-        const json = await options.store.getState(widget.id);
+        const json = await untilAborted(options.store.getState(widget.id, signal), signal);
+        if (json === ABANDONED) return abandon();
         return ok(id, json === null ? null : JSON.parse(json));
       }
 
@@ -393,7 +436,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       }
 
       audit({ widgetId: widget.id, method, decision: "dispatched" });
-      await options.store.putState(widget.id, json);
+      const written = await untilAborted(options.store.putState(widget.id, json, signal), signal);
+      if (written === ABANDONED) return abandon();
       return ok(id, true);
     } catch (error) {
       // Same posture as capability handlers: the real error is the host's to
@@ -461,7 +505,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     // namespacing comes from the port's closure, never from the message, so
     // one widget cannot read or write another widget's state.
     if (request.method === "marzi/saveState" || request.method === "marzi/loadState") {
-      return handleState(widget, request.id, request.method, request.params);
+      return handleState(widget, request.id, request.method, request.params, callSignal(widget));
     }
 
     const capability = registry.get(request.method);
@@ -505,27 +549,17 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     //
     // Without the race, a widget could pin unbounded memory by calling a slow
     // handler in a loop: each pending promise holds its closure forever.
-    const signal = AbortSignal.any([
-      widget.lifetime.signal,
-      AbortSignal.timeout(options.callTimeoutMs ?? 30_000),
-    ]);
+    const signal = callSignal(widget);
 
     try {
-      const outcome = await Promise.race([
+      const outcome = await untilAborted(
         Promise.resolve(capability.handler(params.value, { signal })),
-        new Promise<typeof ABANDONED>((resolve) => {
-          signal.addEventListener("abort", () => resolve(ABANDONED), { once: true });
-        }),
-      ]);
+        signal,
+      );
 
       if (outcome === ABANDONED) {
         // The widget may already be gone; replying to a closed port is a no-op.
-        audit({
-          widgetId: widget.id,
-          method: request.method,
-          decision: "refused",
-          reason: widget.lifetime.signal.aborted ? "widget destroyed" : "timed out",
-        });
+        audit({ widgetId: widget.id, method: request.method, decision: "refused", reason: abandonReason(widget) });
         return fail(request.id, RPC.TIMEOUT, "capability timed out");
       }
 
