@@ -72,6 +72,26 @@ not correctness. The self-navigation leak that used to
 head this list is closed by the warden (`demo/self-nav.html` shows the same
 attack, now stopped).
 
+## Your page's Content-Security-Policy
+
+marzi builds its frames with `srcdoc`, and a browser gives a `srcdoc` frame a
+copy of its parent page's policy. Your page's CSP therefore applies inside every
+widget, on top of marzi's own:
+
+- **If it forbids inline scripts, no widget starts.** That includes
+  `script-src 'self'`, `default-src 'self'` and any nonce- or hash-based
+  ("strict") policy; `onWidgetFault` reports `never-started`. Adding
+  `'unsafe-inline'` doesn't help next to a nonce or hash, because browsers
+  ignore it there.
+- **If it limits `style-src` or `img-src`,** widgets lose their inline styles
+  or their `data:` images.
+
+Measured in Chrome, WebKit and Firefox. A page that shows widgets needs a policy
+that allows inline scripts and styles, which costs that page CSP's protection
+against injected scripts. If your app uses a strict policy, serve only the
+widget pages with a looser one. A later release may lift this by loading the
+sandbox from a file instead of `srcdoc`.
+
 ## Try it
 
 ```bash
