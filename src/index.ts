@@ -176,6 +176,8 @@ export interface AuditEvent {
   decision: "dispatched" | "refused";
   /** Present on refusal: why. Safe to show a developer, not a widget. */
   reason?: string;
+  /** The marzi that made the decision (`VERSION`), for logs that outlive upgrades. */
+  version: string;
 }
 
 /**
@@ -342,10 +344,10 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   const liveIds = new Set<string>();
 
   /** Report a decision without letting a bad listener break dispatch. */
-  function audit(event: AuditEvent): void {
+  function audit(event: Omit<AuditEvent, "version">): void {
     if (!options.onAudit) return;
     try {
-      options.onAudit(event);
+      options.onAudit({ ...event, version: VERSION });
     } catch (error) {
       console.error("[marzi] onAudit threw:", error);
     }
