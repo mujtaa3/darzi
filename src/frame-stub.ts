@@ -37,8 +37,8 @@ export const FRAME_STUB = `
      * Ask the host for something. Returns a Promise.
      *
      * Safe to call before the line is up: the message waits in the queue. The
-     * host may refuse — from rung 5 it will, whenever the capability was not
-     * granted — and a refusal rejects the promise.
+     * host may refuse (an unregistered name, malformed params, the rate limit),
+     * and a refusal rejects the promise.
      */
     call: function (method, params) {
       return new Promise(function (resolve, reject) {

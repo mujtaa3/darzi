@@ -15,13 +15,16 @@
  *                         the host page — so we insert a frame we do control
  *                         between the host and the widget. See `warden()`.
  *
- * None substitutes for another. Measured proof lives in
- * learnings/browser-platform.md and learnings/csp-verified.md.
+ * None substitutes for another. The repository's attack suite
+ * (tests/attacks/) measures each one in Chrome, WebKit and Firefox.
  */
 
 import { FRAME_STUB } from "./frame-stub.js";
 
-/** The single sandbox token we grant. See learnings/browser-platform.md. */
+/**
+ * The single sandbox token we grant. Everything else — same origin, popups,
+ * top navigation, forms, modals — stays withheld.
+ */
 export const SANDBOX_TOKENS = "allow-scripts";
 
 /**
@@ -68,9 +71,9 @@ export const FRAME_ALLOW = "";
  * Keep the host's URL out of anything the frame causes.
  *
  * A navigation normally carries a `Referer` naming the page it came from, and
- * app URLs routinely contain ids and tokens. Since a widget CAN navigate itself
- * away (demonstrated in demo/self-nav.html), this stops that navigation also
- * handing over where it came from.
+ * app URLs routinely contain ids and tokens. The warden stops a widget
+ * navigating itself away; should a navigation ever get out regardless, this
+ * keeps it from also handing over where it came from.
  */
 export const FRAME_REFERRER_POLICY = "no-referrer";
 
@@ -129,8 +132,9 @@ ${body}
  * of that frame — including the frame navigating itself via `location=`,
  * `location.replace`, a meta refresh or a form submit — and the block lands
  * before any DNS or TCP leaves the machine (verified in Chrome, Firefox, WebKit
- * and Safari; see learnings/csp-verified.md). `'none'` is the only safe value:
- * any allowed origin would be a destination for stolen data.
+ * and Safari; the attack suite's navigation spec re-checks it). `'none'` is
+ * the only safe value: any allowed origin would be a destination for stolen
+ * data.
  *
  * Why the rest of the widget's policy is repeated here: a `srcdoc` document
  * inherits its parent's policy container in addition to its own. A bare
