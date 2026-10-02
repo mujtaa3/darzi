@@ -1,10 +1,9 @@
 /**
  * marzi — run LLM-generated widgets safely inside your web app.
  *
- * Rung 3 of the build ladder: the jail and the phone line work, and widgets can
- * now call named capabilities. There are no grants yet — every registered
- * capability is callable by every widget. Rung 5 fixes that.
- * See docs/architecture/roadmap.md.
+ * In 0.1.0, registering a capability is the authorization: every capability
+ * passed to `createRuntime` is callable by every widget. Per-widget grants are
+ * designed and scheduled for the next release (see the README).
  */
 
 // The `.js` extension is required even though these files are `.ts`:
@@ -304,8 +303,7 @@ function newWidgetId(): string {
  * Create a runtime holding the app's capability catalog.
  *
  * The catalog is per-app rather than per-widget: every widget is offered the
- * same menu, and (from rung 5) each widget's grants decide which entries it may
- * actually order from.
+ * same menu and, in 0.1.0, may order anything on it.
  */
 export function createRuntime(options: RuntimeOptions): Runtime {
   const registry = new Map<string, Capability>();
@@ -343,13 +341,6 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   /** Ids of widgets currently rendered and not yet destroyed. */
   const liveIds = new Set<string>();
 
-  /**
-   * The switchboard, in its rung-3 form: validate, look up, dispatch.
-   *
-   * Rung 5 inserts the grant check between "look up" and "dispatch". Everything
-   * here is deliberately one path, so there is one place where a call can be
-   * refused rather than several that might disagree.
-   */
   /** Report a decision without letting a bad listener break dispatch. */
   function audit(event: AuditEvent): void {
     if (!options.onAudit) return;
@@ -467,6 +458,11 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   }
 
   /**
+   * The switchboard: validate, look up, dispatch. Deliberately one path, so
+   * there is one place where a call can be refused rather than several that
+   * might disagree. Per-widget grants, when they come, slot in between "look
+   * up" and "dispatch".
+   *
    * `widget` is supplied by the caller, which is the port's own message handler.
    * It is never read out of the message. That is the whole reason a widget
    * cannot impersonate another one: it has no field to lie in.
@@ -519,8 +515,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     }
 
     // Built-ins before the registry: these are runtime protocol, not app
-    // capabilities, and (note for rung 5) they are runtime-governed — grants
-    // will apply to the capability registry only. The widget id used for
+    // capabilities, and they are runtime-governed — per-widget grants, when
+    // they come, apply to the capability registry only. The widget id used for
     // namespacing comes from the port's closure, never from the message, so
     // one widget cannot read or write another widget's state.
     if (request.method === "marzi/saveState" || request.method === "marzi/loadState") {
@@ -612,7 +608,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
 
   function render(body: WidgetBody, container: HTMLElement, renderOptions?: RenderOptions): Widget {
     // A saved widget renders under its record id — that continuity is what
-    // makes its stored state (and, from rung 5, its grants) find it again.
+    // makes its stored state find it again.
     const id = renderOptions?.id ?? newWidgetId();
 
     // One live widget per id. Two frames under one id would share one state

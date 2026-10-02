@@ -10,14 +10,14 @@
 
 /** One immutable iteration of a widget's content. */
 export interface WidgetVersion {
-  /** 1-based version number; refinement (rung 6.5) appends the next one. */
+  /** 1-based version number; refinement appends the next one. */
   n: number;
   /** The HTML fragment exactly as the model wrote it. Hostile, as always. */
   body: string;
   /**
    * What this version DECLARED it calls and uses. Per-version on purpose: a
    * refinement can change both, and the difference between two versions is
-   * exactly what re-consent (rung 5 × 6.5) will show the user.
+   * exactly what a re-consent step will show the user once grants exist.
    */
   capabilities: string[];
   libs: string[];
@@ -39,10 +39,11 @@ export interface WidgetRecord {
   /**
    * The capability names this widget stands approved for.
    *
-   * ⚠️ Recorded, NOT yet enforced — rung 5 makes the switchboard compute
-   * `effective = granted − suspended` from this. Lives on the record rather
-   * than a version because authority belongs to the widget across versions;
-   * versions carry what they *ask* for, the record carries what was *granted*.
+   * ⚠️ Recorded, NOT enforced in 0.1.0 — per-widget grants (next release) make
+   * the switchboard compute `effective = granted − suspended` from this. Lives
+   * on the record rather than a version because authority belongs to the
+   * widget across versions; versions carry what they *ask* for, the record
+   * carries what was *granted*.
    */
   grants: string[];
   /** Which entry in `versions` renders. Rollback = point this at an older n. */
