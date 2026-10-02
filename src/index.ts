@@ -33,8 +33,8 @@ export type {
 } from "./store.js";
 export { memoryStore } from "./store.js";
 
-/** Library version. Goes into audit entries, so a log line names the code that produced it. */
-export const VERSION = "0.0.0";
+/** Library version, exported so a host can record which marzi produced a log line or a saved widget. */
+export const VERSION = "0.1.0";
 
 /**
  * A widget's HTML body, exactly as the model wrote it.
