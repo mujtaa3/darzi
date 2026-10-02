@@ -1,10 +1,23 @@
 {
   "name": "marzi",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Run LLM-generated widgets safely inside your web app.",
+  "keywords": [
+    "llm",
+    "ai",
+    "widgets",
+    "generative-ui",
+    "sandbox",
+    "iframe",
+    "csp",
+    "mcp",
+    "mcp-apps",
+    "security"
+  ],
   "license": "MIT",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -12,7 +25,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "src",
+    "prompts"
   ],
   "scripts": {
     "build": "tsc",
