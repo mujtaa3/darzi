@@ -1,43 +1,52 @@
 # marzi
 
-**Let your users build their own widgets. Run what the model writes without trusting it.**
+**marzi lets the users of your web app make their own widgets. A model writes
+the code, and marzi runs that code but does not trust it.**
 
-Every app has a long tail of things users want and nobody will build: spending
-by weekday, invoices thirty days overdue, a button that archives last year. With
-marzi that's a sentence. The user describes it, a model writes it, and marzi
-runs it inside your app, against your real API, as a mod the user keeps.
+Every app has many small features that users want and that no one will build.
+Examples are spending by weekday, invoices that are thirty days overdue, or a
+button that archives last year. With marzi, a user describes the feature in one
+sentence. A model writes a widget, and marzi runs it in your app with your real
+API. The user keeps the widget.
 
-> **Status: 0.1.0, the runtime.** Containment is built and measured in three
-> browsers. Per-widget permissions come next; the API may still change
-> before 1.0.
+> **Status:** version 0.1.0 contains the runtime. The containment is built and
+> tested in three browsers. Per-widget grants are planned for the next release.
+> The API may change before 1.0.
 
-## The catch
+## The problem
 
-Code a model wrote on a user's say-so is code *anyone who can influence that
-prompt* wrote: a poisoned transaction memo, a crafted support ticket, text
-pasted from a web page. So marzi never trusts a widget. It treats each one as
-hostile, forever, and arranges things so a hostile widget can't do much.
+A model writes a widget from a prompt. Anyone who can put text into that prompt
+can affect the code. Examples are a transaction memo with hidden instructions,
+a support ticket that an attacker wrote, or text pasted from a web page. Thus
+marzi never trusts a widget. It always treats each widget as hostile, and it
+limits what a hostile widget can do.
 
-## How it does that
+## How marzi contains a widget
 
-**The jail.** The widget runs in an iframe the browser treats as a nobody: a
-sandbox that grants `allow-scripts` and nothing else, so it can't touch your
-page or cookies, and a Content-Security-Policy of `default-src 'none'`, so it
-can't use the network. Not `fetch`, not an `<img>` beacon, not a font.
+**The jail.** Each widget runs in a frame (an iframe) that the browser treats
+as part of no site. Two browser controls apply to this frame:
 
-**The phone line.** One way out: a private `MessageChannel` to your page,
-carrying JSON-RPC 2.0. Data, actions, saved state: all of it is a message on
-that line.
+- The `sandbox` attribute has only the `allow-scripts` token. Thus the widget
+  cannot access your page or your cookies.
+- A Content-Security-Policy (CSP) of `default-src 'none'` blocks the network.
+  The widget cannot use `fetch`, load an `<img>` beacon, or load a font.
 
-**The switchboard.** Your page checks every message. If a call names a
-capability you registered, its handler runs in your page, with your session,
-and the result goes back. Anything else is refused. Every decision can be
-logged.
+**The channel.** The widget has one channel to your page: a private
+`MessageChannel`. The messages on it use JSON-RPC 2.0. Each data request, each
+action, and each saved state is a message on this channel.
 
-**The warden.** A frame can navigate *itself* to `https://evil.example/?data=…`,
-and only its parent can forbid that. So a second, script-free frame marzi
-controls wraps the widget; its `frame-src 'none'` stops the navigation before a
-packet leaves the machine.
+**The switchboard.** The switchboard is marzi code that runs in your page. It
+checks each message from a widget. A capability is a named operation that you
+register, with a handler function. If a call names a registered capability, the
+switchboard runs its handler in your page, with your session. Then it sends the
+result to the widget. The switchboard refuses all other messages, and you can
+record each decision in an audit log.
+
+**The warden.** A frame can navigate *itself* to a URL such as
+`https://evil.example/?data=…`. Only the parent of the frame can block this
+navigation. Thus marzi puts the widget's frame inside a second frame that marzi
+controls: the warden. The warden contains no scripts. Its CSP
+`frame-src 'none'` blocks the navigation before a packet leaves the machine.
 
 ```
   your page (trusted)                        the jail (hostile by assumption)
@@ -77,7 +86,7 @@ widget.frame.style.height = "320px";   // the outer frame is yours to size
 widget.destroy();
 ```
 
-Inside the widget, the model's code gets one object:
+In the widget, the model's code gets one object, `marzi`:
 
 ```html
 <ul id="out"></ul>
@@ -95,71 +104,103 @@ Inside the widget, the model's code gets one object:
 </script>
 ```
 
-`marzi.call(name, params)` returns a promise; `marzi.saveState(value)` and
-`marzi.loadState()` keep one small JSON value per saved widget. That's the whole
-in-frame API.
+`marzi.call(name, params)` returns a promise. `marzi.saveState(value)` and
+`marzi.loadState()` save and load one small JSON value for each saved widget.
+These three methods are the full in-frame API.
 
-**Getting the HTML.** marzi never calls a model; you do. Fill in the
-placeholders in `prompts/widget-author.md` (or `widget-refine.md`), send it to
-your model, hand the HTML back to `render`. The templates teach the model the
-jail's rules. Both ship in the package; a server finds them with
-`import.meta.resolve("marzi/prompts/widget-author.md")` and reads the file. For a charting library, vendor its source and pass it in
-`libraries`; marzi injects it inline, since the frame can never fetch it.
+**Getting the HTML.** marzi never calls a model. Your app calls the model:
+
+1. Replace the placeholders in `prompts/widget-author.md` (or
+   `widget-refine.md`) with your values.
+2. Send the result to your model.
+3. Give the HTML that the model returns to `render`.
+
+The templates teach the model the rules of the jail. Both templates are in the
+package. On a server, find a template with
+`import.meta.resolve("marzi/prompts/widget-author.md")`, then read the file.
+
+To use a library such as a charting library, put a copy of its source code in
+your app. Give that source code to marzi in the `libraries` option. marzi adds
+the source code to the widget's frame as an inline script, because the frame can
+never fetch it.
 
 ## Who decides what a widget may call
 
-In 0.1.0, **registering a capability is the authorization.** Everything you pass
-to `createRuntime` is callable by every widget. Register the way you'd expose a
-public API: if you wouldn't want *any* widget calling it, leave it out.
-Descriptions carry no enforcement weight; only your handler's validation does.
-Per-widget grants, re-approval when a refinement asks for more, and a
-read/write switch are designed for the next release.
+In 0.1.0, **registering a capability is the authorization.** Every widget can
+call every capability that you give to `createRuntime`. Register capabilities
+as you would make a public API. Register a capability only if it is safe for
+*any* widget to call it. A capability's `description` does not limit what a
+widget can do. Only the validation in your handler limits it.
 
-## What marzi promises, and what it doesn't
+These features are designed for the next release:
 
-> Generated widgets receive no ambient authority over the host; every
-> application operation is mediated through explicit host capabilities.
+- Per-widget grants.
+- A new approval when a refinement (a new version of a widget) asks for more
+  capabilities.
+- A read/write switch.
 
-Not promised: "no network of any kind", "the message channel is the only
-channel", or that any permission system makes hostile code safe.
+## What marzi promises and does not promise
 
-**Known residuals.** *WebRTC*, in every browser tested: a widget can reach a
-STUN server of its choosing; the `webrtc 'block'` directive marzi sets is
-honoured by none of Chrome, WebKit or Firefox, and the attack suite will flag
-the day that changes. As a screen for the obvious case, `render` refuses any
-body containing a WebRTC API name (`DEFAULT_SCREEN`; the `screen` option
-changes the list). A filter, not containment: it can't see text that arrives
-later through data. Also: DNS prefetch and preconnect hints; no CPU or memory
-isolation; and nothing checks that a widget's *numbers* are right.
+> A widget gets no authority over your app from the place where it runs (no
+> *ambient authority*). Every operation on your app uses a capability that you
+> registered.
 
-## Your page's Content-Security-Policy
+marzi does not promise these things:
 
-marzi's frames are `srcdoc` frames, which get a copy of the parent page's
-policy. If yours forbids inline scripts (`script-src 'self'`, `default-src
-'self'`, any nonce or hash policy), no widget starts and `onWidgetFault`
-reports `never-started`; `'unsafe-inline'` beside a nonce is ignored. A
-`style-src` or `img-src` limit strips widgets' styles or `data:` images.
-Measured in Chrome, WebKit and Firefox.
+- That a widget has no network access of any kind.
+- That the channel is the only channel out of the widget.
+- That any permission system makes hostile code safe.
 
-Pages that show widgets need a policy that allows inline scripts and styles. If
-your app runs a strict policy, give only those pages a looser one. A later
-release may lift this by loading the warden from a file.
+**Known residual risks:**
+
+- *WebRTC*, in every browser tested. A widget can connect to a STUN server that
+  it chooses. marzi sets the `webrtc 'block'` directive, but Chrome, WebKit, and
+  Firefox all ignore it. If a browser starts to obey it, the attack suite will
+  show the change.
+- DNS prefetch and preconnect hints.
+- No CPU or memory isolation.
+- Nothing checks that a widget's *numbers* are correct.
+
+To catch the obvious WebRTC case, `render` refuses widget HTML that contains a
+WebRTC API name. The list of names is `DEFAULT_SCREEN`. Use the `screen` option
+to change the list. The screen is not containment. It cannot see text that
+arrives later in data.
+
+## Your page's CSP
+
+marzi's frames are `srcdoc` frames. A `srcdoc` frame gets a copy of its
+parent's CSP. Thus your page's CSP applies to every marzi frame.
+
+If your CSP blocks inline scripts, no widget starts, and `onWidgetFault`
+reports `never-started`. These CSPs block inline scripts: `script-src 'self'`,
+`default-src 'self'`, and any nonce or hash policy. If a CSP directive has a
+nonce, the browser ignores `'unsafe-inline'` in that directive. A `style-src`
+limit removes widget styles, and an `img-src` limit removes widget `data:`
+images. Tests in Chrome, WebKit, and Firefox show this behavior.
+
+Pages that show widgets need a CSP that allows inline scripts and inline
+styles. If your app uses a strict CSP, give a less strict CSP only to the pages
+that show widgets. A later release may remove this requirement by loading the
+warden from a file.
 
 ## Try it
 
-From a checkout of this repository:
+In a clone of this repository, run these commands:
 
 ```bash
 npm install && npm run build
 node --env-file=.env server.js        # → http://127.0.0.1:8000/
 ```
 
-That's Ledger, a small finance app over a transactions CSV: describe a widget,
-watch the model write it, save it, refine it, roll it back. It's the reference
-for wiring capabilities, libraries, storage and the audit log. Generation needs
-`ANTHROPIC_API_KEY` in `.env`, read by the server only. `demo/` keeps the older
-single-purpose pages, including the self-navigation leak and the listener that
-proves whether anything left the machine.
+This starts Ledger, a small finance app that uses a CSV file of transactions.
+In Ledger, you describe a widget and see the model write it. You can save the
+widget, refine it, and restore an earlier version. Ledger is the reference
+example for how to connect capabilities, libraries, storage, and the audit log.
+
+To generate widgets, put `ANTHROPIC_API_KEY` in `.env`. Only the server reads
+this key. The `demo/` folder has the older single-purpose pages. These include
+the self-navigation leak and the listener that proves if anything left the
+machine.
 
 ## The attack suite
 
@@ -168,26 +209,32 @@ npx playwright install webkit firefox    # once; Chrome itself must be installed
 npm test                                 # build, then every attack in three browsers
 ```
 
-Hostile widgets try to escape, exfiltrate and overreach: thirteen classes under
-`tests/attacks/`, each negative paired with a positive control. The witness is
-a server outside the browser (HTTP on `127.0.0.1:9999`, UDP on `:3478`),
-because a page can't be trusted to report on itself. Retries are off, so a
-flaky pass can't hide a leak. Nothing is tagged unless it's green.
+In the attack suite, hostile widgets try to escape the jail, leak data, and do
+more than marzi allows. There are thirteen classes of attack in
+`tests/attacks/`. Each test that expects an attack to fail has a positive
+control. The control runs the same attack without the defense and expects it to
+succeed.
+
+The witness is a server outside the browser that records the traffic it gets
+(HTTP on `127.0.0.1:9999`, UDP on `:3478`). The witness is outside the browser
+because you cannot trust a page to report on itself. Retries are off, so a test
+that passes by chance cannot hide a leak. A release gets a tag only when all
+tests pass.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `src/index.ts` | `createRuntime`, the registry, the switchboard |
-| `src/jail.ts` | sandbox tokens, CSP, the warden, document composition |
-| `src/rpc.ts` | JSON-RPC types and the inbound validator |
-| `src/frame-stub.ts` | the in-frame helper: **untrusted**, ergonomics only |
-| `src/store.ts` | the storage contract and an in-memory store |
-| `prompts/` | the author and refine templates |
-| `app/` | Ledger, the reference host app |
-| `tests/` | the attack suite: specs, attack pages, the outside witness |
+| `src/index.ts` | `createRuntime`, the registry, and the switchboard |
+| `src/jail.ts` | the sandbox tokens, the CSP, the warden, and how marzi builds the frame document |
+| `src/rpc.ts` | JSON-RPC types and the validator for incoming messages |
+| `src/frame-stub.ts` | the in-frame helper (the `marzi` object): **untrusted**, for ease of use only, not for security |
+| `src/store.ts` | the storage interface and an in-memory store |
+| `prompts/` | the templates that write and refine widgets |
+| `app/` | Ledger, the reference app |
+| `tests/` | the attack suite: test files, attack pages, and the witness |
 
-Zero runtime dependencies.
+marzi has no runtime dependencies.
 
 ## License
 
