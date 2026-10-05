@@ -102,7 +102,8 @@ in-frame API.
 **Getting the HTML.** marzi never calls a model; you do. Fill in the
 placeholders in `prompts/widget-author.md` (or `widget-refine.md`), send it to
 your model, hand the HTML back to `render`. The templates teach the model the
-jail's rules. For a charting library, vendor its source and pass it in
+jail's rules. Both ship in the package; a server finds them with
+`import.meta.resolve("marzi/prompts/widget-author.md")` and reads the file. For a charting library, vendor its source and pass it in
 `libraries`; marzi injects it inline, since the frame can never fetch it.
 
 ## Who decides what a widget may call
