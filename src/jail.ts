@@ -106,12 +106,18 @@ function inlineScriptSafe(source: string): string {
  * because the frame has no network and must keep having none. A library runs
  * inside the jail and therefore holds no authority: it cannot reach anything
  * the widget could not already reach. Injection is composition, not permission.
+ *
+ * Also returns which lines of the document hold the body. A browser reports an
+ * error's line in this whole document — stub and libraries included — so the
+ * runtime needs the body's place to turn that into a line of the widget's own
+ * HTML (see WidgetFault.line).
  */
-export function scaffold(body: string, libSources: string[] = []): string {
+export function scaffold(body: string, libSources: string[] = []): Scaffold {
   const libs = libSources
     .map((source) => `<script>${inlineScriptSafe(source)}</script>\n`)
     .join("");
-  return `<!doctype html>
+  // Everything before the body, kept apart so its lines can be counted.
+  const head = `<!doctype html>
 <html>
 <head>
 <meta http-equiv="Content-Security-Policy" content="${WIDGET_CSP}">
@@ -119,9 +125,33 @@ export function scaffold(body: string, libSources: string[] = []): string {
 <script>${FRAME_STUB}</script>
 ${libs}</head>
 <body>
-${body}
+`;
+  const first = lineBreaks(head) + 1;
+  return {
+    html: `${head}${body}
 </body>
-</html>`;
+</html>`,
+    bodyLines: { first, last: first + lineBreaks(body) },
+  };
+}
+
+/** A composed widget document, and which of its lines hold the widget's HTML. */
+export interface Scaffold {
+  /** The complete document, ready to be wrapped in the warden. */
+  html: string;
+  /** The first and last document lines of the widget's HTML, 1-based, inclusive. */
+  bodyLines: { first: number; last: number };
+}
+
+/**
+ * Count line breaks the way the HTML parser does. The parser turns CR LF into
+ * one break and a lone CR into a break of its own before it counts lines, so
+ * counting "\n" alone would drift on text written with Windows or old Mac line
+ * endings. The `</script` rewrite and the srcdoc escaping add no breaks, so
+ * the count of the composed text is the count the browser sees.
+ */
+function lineBreaks(text: string): number {
+  return text.match(/\r\n|\r|\n/g)?.length ?? 0;
 }
 
 /**

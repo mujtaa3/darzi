@@ -189,15 +189,35 @@ export interface WidgetFault {
   /**
    * `never-started` — the frame never completed its handshake. Broken scaffold,
    * a widget that killed the stub, or a frame that navigated away on load.
-   * `script-error` — the widget's own code threw.
+   * `script-error` — the widget's own code threw, or a promise it made was
+   * rejected and nothing handled the rejection.
    */
   kind: "never-started" | "script-error";
   /**
    * ⚠️ For `script-error` this is **widget-authored text**, and it arrives in
    * the host origin. Escape it, never assign it to innerHTML. The runtime
    * clamps its length; it does not and cannot vouch for its content.
+   * Browsers often quote values into error messages ("reading 'merchant'", a
+   * JSON parse error quoting its input), so it can carry fragments of data the
+   * widget received.
    */
   message: string;
+  /**
+   * `script-error` only: the error's class as the widget reported it, such as
+   * "TypeError". Widget-authored, at most 40 characters. Absent when the thrown
+   * value had no name.
+   */
+  name?: string;
+  /**
+   * `script-error` only: the line where the error was thrown, counted from the
+   * first line of the HTML passed to `render` (1-based). Absent for a rejected
+   * promise, and for a position outside the widget's HTML — inside a vendored
+   * library, for example. A claim, not a measurement: a widget can report any
+   * line of its own HTML.
+   */
+  line?: number;
+  /** `script-error` only: the column on `line`, 1-based. Present only with `line`. */
+  column?: number;
 }
 
 export interface RuntimeOptions {
@@ -264,6 +284,8 @@ interface LiveWidget {
   lifetime: AbortController;
   /** Fixed-window flood counter — see RuntimeOptions.rateLimit. */
   rate: RateWindow;
+  /** Which lines of the frame's document hold the widget's HTML, for fault lines. */
+  bodyLines: { first: number; last: number };
 }
 
 /** Distinguishes "the runtime gave up" from a value a handler actually returned. */
@@ -290,6 +312,29 @@ function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T | typ
 /** Why the runtime gave up on a call: for the audit, never for the widget. */
 function abandonReason(widget: LiveWidget): string {
   return widget.lifetime.signal.aborted ? "widget destroyed" : "timed out";
+}
+
+/**
+ * Cut widget-authored text to at most `max` UTF-16 units without splitting a
+ * surrogate pair. JavaScript counts string length in UTF-16 units, and a
+ * character outside the Basic Multilingual Plane (most emoji) takes two. A cut
+ * between them would hand the host malformed text that marzi itself made.
+ */
+function clampText(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const last = cut.charCodeAt(cut.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+}
+
+/** Sanity ceiling for a reported line or column. */
+const MAX_POSITION = 1_000_000;
+
+/** A widget-reported line or column: a positive whole number, or nothing. */
+function position(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value < MAX_POSITION
+    ? value
+    : undefined;
 }
 
 function newWidgetId(): string {
@@ -355,17 +400,13 @@ export function createRuntime(options: RuntimeOptions): Runtime {
 
   /** Longest widget-authored message we will carry across the wall. */
   const MAX_FAULT_MESSAGE = 300;
+  /** Longest error class name we will carry ("TypeError" is 9). */
+  const MAX_FAULT_NAME = 40;
 
-  function reportFault(widgetId: string, kind: WidgetFault["kind"], message: string): void {
-    const fault: WidgetFault = {
-      widgetId,
-      kind,
-      // Clamp here, host-side. The stub clamps too, but the stub is inside the
-      // jail and its cooperation cannot be assumed.
-      message: String(message).slice(0, MAX_FAULT_MESSAGE),
-    };
+  /** Hand a fault to the host without letting a bad listener break the runtime. */
+  function reportFault(fault: WidgetFault): void {
     if (!options.onWidgetFault) {
-      console.warn(`[marzi] widget ${widgetId} ${kind}:`, fault.message);
+      console.warn(`[marzi] widget ${fault.widgetId} ${fault.kind}:`, fault.message);
       return;
     }
     try {
@@ -373,6 +414,41 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     } catch (error) {
       console.error("[marzi] onWidgetFault threw:", error);
     }
+  }
+
+  /**
+   * Rebuild a widget's `marzi/fault` notification into a WidgetFault.
+   *
+   * Every field is a claim. Only the four known fields are read, and each one
+   * must have the right type or it is dropped. Text is clamped here, host-side:
+   * the stub clamps too, but it is inside the jail and its cooperation cannot
+   * be assumed. The line is moved from the frame's document into the widget's
+   * own HTML, and a position outside that HTML (in the stub or a library) is
+   * dropped rather than reported as a line the widget never had. The id comes
+   * from the port, as it does for every message.
+   */
+  function reportScriptError(widget: LiveWidget, params: unknown): void {
+    const claim = (typeof params === "object" && params !== null ? params : {}) as Record<string, unknown>;
+    const message = claim["message"];
+    const fault: WidgetFault = {
+      widgetId: widget.id,
+      kind: "script-error",
+      // Strings only: String() on an object the widget built can throw.
+      message: clampText(typeof message === "string" ? message : "unknown error", MAX_FAULT_MESSAGE),
+    };
+
+    const name = claim["name"];
+    if (typeof name === "string" && name !== "") fault.name = clampText(name, MAX_FAULT_NAME);
+
+    const line = position(claim["line"]);
+    const { first, last } = widget.bodyLines;
+    if (line !== undefined && line >= first && line <= last) {
+      fault.line = line - first + 1;
+      const column = position(claim["column"]);
+      if (column !== undefined) fault.column = column;
+    }
+
+    reportFault(fault);
   }
 
   const rateLimit = options.rateLimit ?? { calls: 120, windowMs: 10_000 };
@@ -495,10 +571,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     // dropped rather than answered.
     const notification = parseNotification(raw);
     if (notification !== null) {
-      if (notification.method === "marzi/fault") {
-        const params = notification.params as { message?: unknown } | null;
-        reportFault(widget.id, "script-error", String(params?.message ?? "unknown error"));
-      }
+      if (notification.method === "marzi/fault") reportScriptError(widget, notification.params);
       return null;
     }
 
@@ -661,7 +734,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     frame.setAttribute("allow", FRAME_ALLOW);
     frame.setAttribute("referrerpolicy", FRAME_REFERRER_POLICY);
 
-    frame.srcdoc = warden(scaffold(body, libSources));
+    const composed = scaffold(body, libSources);
+    frame.srcdoc = warden(composed.html);
 
     // The private line. port1 stays here; port2 is handed to the widget and
     // becomes the only way it can reach us.
@@ -676,6 +750,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       port: channel.port1,
       lifetime: new AbortController(),
       rate: { start: 0, count: 0 },
+      bodyLines: composed.bodyLines,
     };
 
     channel.port1.onmessage = (event: MessageEvent): void => {
@@ -722,7 +797,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     const startTimer = setTimeout(() => {
       if (portIssued) return;
       window.removeEventListener("message", onKnock);
-      reportFault(id, "never-started", "widget did not complete its handshake");
+      reportFault({ widgetId: id, kind: "never-started", message: "widget did not complete its handshake" });
     }, options.startTimeoutMs ?? 10_000);
 
     // Attach last: the frame does not begin loading until it is in the

@@ -210,7 +210,7 @@ npm test                                 # build, then every attack in three bro
 ```
 
 In the attack suite, hostile widgets try to escape the jail, leak data, and do
-more than marzi allows. There are thirteen classes of attack in
+more than marzi allows. There are fourteen classes of attack in
 `tests/attacks/`. Each test that expects an attack to fail has a positive
 control. The control runs the same attack without the defense and expects it to
 succeed.

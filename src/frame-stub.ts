@@ -68,24 +68,40 @@ export const FRAME_STUB = `
     }
   };
 
-  // Tell the host when the widget's own code throws, so it can show something
-  // useful instead of a blank box. A notification: no id, no reply expected.
-  // The host clamps and escapes this — it is widget-authored text.
+  // Tell the host when the widget's own code throws, so it can say what broke
+  // instead of leaving a blank box. A notification: no id, no reply expected.
+  // Every field is a claim the host checks: it rebuilds, clamps and positions
+  // them itself, because widget code can reach this listener like the rest of
+  // the stub.
   window.addEventListener("error", function (event) {
-    var where = event.lineno ? " (line " + event.lineno + ")" : "";
+    var error = event.error;
     transmit({
       jsonrpc: "2.0",
       method: "marzi/fault",
-      params: { message: String(event.message || "script error").slice(0, 300) + where }
+      params: {
+        message: String(event.message || "script error").slice(0, 300),
+        // The error's class, when the thrown value has one: "TypeError".
+        name: error && typeof error.name === "string" ? error.name.slice(0, 40) : undefined,
+        // Where the browser says it happened, in lines of this whole document.
+        // The host knows where the widget's own HTML starts in it and does the
+        // subtraction, so this stays the browser's raw number.
+        line: event.lineno,
+        column: event.colno
+      }
     });
   });
 
   window.addEventListener("unhandledrejection", function (event) {
-    var reason = event.reason && event.reason.message ? event.reason.message : event.reason;
+    var reason = event.reason;
+    var text = reason && reason.message ? reason.message : reason;
     transmit({
       jsonrpc: "2.0",
       method: "marzi/fault",
-      params: { message: "unhandled rejection: " + String(reason).slice(0, 300) }
+      // A rejection has a reason but no position: nothing threw on a line.
+      params: {
+        message: ("unhandled rejection: " + String(text)).slice(0, 300),
+        name: reason && typeof reason.name === "string" ? reason.name.slice(0, 40) : undefined
+      }
     });
   });
 
