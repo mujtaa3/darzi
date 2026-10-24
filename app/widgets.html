@@ -29,6 +29,7 @@
     <input id="refineq" placeholder="What should change? e.g. make the bars green"
            style="flex:1" maxlength="4000">
     <button id="refine">Refine</button>
+    <button id="repair" hidden>Repair…</button>
   </div>
 
   <h2>My shelf</h2>
@@ -74,7 +75,33 @@
 
   const [catalog, libMenu] = await Promise.all([api("/api/catalog"), api("/api/libraries")]);
   const GRANTED = catalog.map((c) => c.name);
+  const KIND = Object.fromEntries(catalog.map((c) => [c.name, c.kind]));
   const LIBS = libMenu.map((l) => l.name);
+
+  // ── Faults ────────────────────────────────────────────────────────────────
+  // A widget decides how often it throws, so only the first few faults of one
+  // render reach the log.
+  const MAX_LOGGED_FAULTS = 5;
+  // marzi audits a handler that threw (or a store) as refused with one of these
+  // reasons, before the widget hears of it. A fault right after one is Ledger's
+  // own failure, not a bug in the widget.
+  const HOST_FAILURES = ["capability failed", "state operation failed"];
+  const HOST_FAILURE = /capability failed|state operation failed/;
+  const HOST_FAILURE_WINDOW_MS = 5000;
+
+  /** A fault on one line: the widget's own text, plus where marzi says it happened. */
+  const describeFault = (f) =>
+    `${f.message}${f.line ? ` (line ${f.line}${f.column ? `, column ${f.column}` : ""})` : ""}`;
+  /** Capability names a body calls literally — the same heuristic as the checks below. */
+  const calledIn = (html) => [...html.matchAll(/marzi\.call\(\s*["'`]([^"'`]+)["'`]/g)].map((m) => m[1]);
+  /** Everything a version declares or calls. */
+  const uses = (declared, html) => [...new Set([...declared, ...calledIn(html)])];
+
+  // Fault state, for what is on screen only. show() resets it on every render.
+  let shown = null;   // { n, request } of the saved version on screen, or null
+  let fault = null;   // its first crash, once one arrives
+  let faultCount = 0;
+  let hostFailureAt = -Infinity;
 
   // Vendored library text, fetched once from our own origin and handed to the
   // runtime as strings. The frame itself stays networkless — injection happens
@@ -109,21 +136,38 @@
       getState: (id, signal) => api(`/api/widgets/${id}/state`, undefined, undefined, signal).then((r) => r.json),
       putState: (id, json, signal) => api(`/api/widgets/${id}/state`, { json }, undefined, signal).then(() => {}),
     },
-    onAudit: (e) => logAudit(
-      `${e.method} — ${e.decision}${e.reason ? ` (${e.reason})` : ""}`,
-      e.decision === "dispatched" ? "ok" : "no",
-    ),
+    onAudit: (e) => {
+      if (e.decision === "refused" && HOST_FAILURES.includes(e.reason)) hostFailureAt = Date.now();
+      logAudit(
+        `${e.method} — ${e.decision}${e.reason ? ` (${e.reason})` : ""}`,
+        e.decision === "dispatched" ? "ok" : "no",
+      );
+    },
     onWidgetFault: (f) => {
-      logAudit(`widget ${f.kind}: ${f.message}`, "fault");
-      statusEl.textContent = f.kind === "never-started"
-        ? "widget never started — see the log" : "widget hit a script error — see the log";
+      faultCount += 1;
+      if (faultCount <= MAX_LOGGED_FAULTS) logAudit(`widget ${f.kind}: ${describeFault(f)}`, "fault");
+      else if (faultCount === MAX_LOGGED_FAULTS + 1) logAudit("further faults from this render are counted, not logged", "fault");
+      if (!live || f.widgetId !== live.id) return; // not what is on screen now
+      const hostSide = f.kind === "script-error" && HOST_FAILURE.test(f.message)
+        && Date.now() - hostFailureAt < HOST_FAILURE_WINDOW_MS;
+      if (f.kind === "never-started") {
+        statusEl.textContent = "widget never started — see the log";
+      } else if (hostSide) {
+        statusEl.textContent = "a call failed inside Ledger, not in the widget — see the log";
+      } else {
+        fault ??= f; // the first crash is what a repair works from
+        // Display only: this compares widget text, so it never decides anything.
+        const again = shown?.request === `repair: ${describeFault(fault)}` ? " — the same error as before the repair" : "";
+        statusEl.textContent = `widget crashed: ${describeFault(fault)}${again}` +
+          (faultCount > 1 ? ` (${faultCount} errors)` : "");
+        $("repair").hidden = !shown; // only a saved version can be repaired
+      }
     },
   });
 
   // ── Static compliance checks (same rules as the prompt template) ──────────
   function checkCompliance(html, declared, declaredLibs) {
-    const called = [...html.matchAll(/marzi\.call\(\s*["'`]([^"'`]+)["'`]/g)].map((m) => m[1]);
-    const unique = [...new Set(called)];
+    const unique = [...new Set(calledIn(html))];
     return [
       { ok: !/<script[^>]*\ssrc=/i.test(html), label: "no external <script src>" },
       { ok: !/<link[^>]*stylesheet/i.test(html), label: "no external stylesheet" },
@@ -156,6 +200,12 @@
 
   function show(widget, durableId) {
     if (live) live.destroy();
+    // A new render starts with clean fault state.
+    shown = null;
+    fault = null;
+    faultCount = 0;
+    hostFailureAt = -Infinity;
+    $("repair").hidden = true;
     $("slot").innerHTML = "";
     // Inject only DECLARED libraries that exist in the menu: an undeclared
     // name would throw in render, and the declaration is what a saved widget
@@ -264,6 +314,8 @@
         live.destroy();
         live = null;
         loaded = null;
+        shown = null;
+        fault = null;
         $("slot").innerHTML = "";
         $("refinebar").hidden = true;
       }
@@ -285,6 +337,10 @@
     const v = record.versions.find((x) => x.n === record.activeVersion);
     show({ title: record.title, html: v.body,
            capabilities: v.capabilities, libs: v.libs }, record.id);
+    // The version actually rendered: what a repair works from. Never read
+    // loaded.activeVersion for that, since it changes before the old version
+    // leaves the screen (rollback and refine both await a save first).
+    shown = live ? { n: v.n, request: v.request } : null;
     renderChips();
     $("refinebar").hidden = false;
   }
@@ -320,36 +376,95 @@
     );
   }
 
+  /**
+   * Append a model reply to `record` as its next version, make it active, save
+   * it, and show it. Refine and repair both end here.
+   */
+  async function appendVersion(record, prev, widget, request, { keepTitle }) {
+    const version = {
+      n: Math.max(...record.versions.map((v) => v.n)) + 1,
+      body: widget.html,
+      capabilities: widget.capabilities,
+      libs: (widget.libs ?? []).filter((l) => LIBS.includes(l)),
+      request,
+      createdAt: Date.now(),
+    };
+    record.versions.push(version);
+    record.activeVersion = version.n;
+    if (!keepTitle) record.title = widget.title;
+    record.updatedAt = Date.now();
+    await api("/api/widgets", record);
+    logDelta(prev, version);
+    adopt(record);
+    await showShelf();
+  }
+
   $("refine").onclick = async () => {
     const request = $("refineq").value.trim();
     if (!loaded || !request) return;
+    // The model takes a while, and another widget may be loaded meanwhile:
+    // capture the record now, and save only if it is still the one on screen.
+    const record = loaded;
     $("refine").disabled = true;
     statusEl.textContent = "refining… (typically 30–60s)";
     try {
-      const prev = loaded.versions.find((v) => v.n === loaded.activeVersion);
+      const prev = record.versions.find((v) => v.n === record.activeVersion);
       const widget = await api("/api/refine", { request, previous: prev.body });
-      const version = {
-        n: Math.max(...loaded.versions.map((v) => v.n)) + 1,
-        body: widget.html,
-        capabilities: widget.capabilities,
-        libs: (widget.libs ?? []).filter((l) => LIBS.includes(l)),
-        request,
-        createdAt: Date.now(),
-      };
-      loaded.versions.push(version);
-      loaded.activeVersion = version.n;
-      loaded.title = widget.title;
-      loaded.updatedAt = Date.now();
-      await api("/api/widgets", loaded);
-      logDelta(prev, version);
-      adopt(loaded);
+      if (loaded !== record) {
+        statusEl.textContent = `another widget was loaded during the refine, so the new version of "${record.title}" was not saved`;
+        return;
+      }
+      await appendVersion(record, prev, widget, request, { keepTitle: false });
       $("refineq").value = "";
-      await showShelf();
     } catch (err) {
       statusEl.textContent = "";
       $("slot").innerHTML = `<div class="err">${esc(err.message)}</div>`;
     } finally {
       $("refine").disabled = false;
+    }
+  };
+
+  // A repair is a refine whose request is the fault. Manual only, and it asks
+  // first: the button appears when the widget chooses to fail, so a click that
+  // lands on it by surprise must not spend a model call.
+  $("repair").onclick = async () => {
+    if (!loaded || !shown || !fault) return;
+    const record = loaded, at = shown.n, crash = fault;
+    const yes = confirm(`Ask the model to repair "${record.title}" v${at}?\n\n${describeFault(crash)}\n\n` +
+      "The model sees this version's code and this error. The error comes from the widget and can quote your data.");
+    if (!yes) return;
+    $("repair").disabled = true;
+    statusEl.textContent = "repairing… (typically 30–60s)";
+    try {
+      const prev = record.versions.find((v) => v.n === at);
+      const { name, message, line, column } = crash;
+      const widget = await api("/api/repair", { previous: prev.body, fault: { name, message, line, column } });
+      if (loaded !== record || shown?.n !== at) {
+        statusEl.textContent = `"${record.title}" changed during the repair, so the repair was not saved`;
+        return;
+      }
+      // A repair must not gain abilities (rule 4 of prompts/widget-repair.md),
+      // and in 0.1.0 nothing else would stop it. A new write is refused; any
+      // other new capability needs a yes.
+      const before = uses(prev.capabilities, prev.body);
+      const added = uses(widget.capabilities, widget.html).filter((n) => !before.includes(n));
+      const writes = added.filter((n) => KIND[n] === "write");
+      if (writes.length) {
+        logAudit(`repair refused: it would add ${writes.join(", ")}`, "no");
+        statusEl.textContent = `the repair would add a write (${writes.join(", ")}), so it was not saved`;
+        return;
+      }
+      if (added.length && !confirm(`The repaired version also calls ${added.join(", ")}. Keep it?`)) {
+        statusEl.textContent = "kept the version that crashed";
+        return;
+      }
+      await appendVersion(record, prev, widget, `repair: ${describeFault(crash)}`, { keepTitle: true });
+      // If the new version already crashed, its fault is the news: keep it on screen.
+      if (!fault) statusEl.textContent = `repaired as v${record.activeVersion}; the v${at} chip brings back the version that crashed`;
+    } catch (err) {
+      statusEl.textContent = `repair failed: ${err.message}`;
+    } finally {
+      $("repair").disabled = false;
     }
   };
 

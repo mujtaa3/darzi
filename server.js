@@ -98,11 +98,47 @@ async function buildPrompt(file, slots) {
   const template = await readFile(join(ROOT, "prompts", file), "utf8");
   // The template file carries a header explaining itself; everything from the
   // first horizontal rule onward is the actual prompt.
-  let prompt = template.slice(template.indexOf("\n---\n") + 5);
-  for (const [name, text] of Object.entries(slots)) {
-    prompt = prompt.replace(`{{${name}}}`, text);
+  const prompt = template.slice(template.indexOf("\n---\n") + 5);
+  // One pass with a function replacer. Text inserted for one slot is never
+  // scanned again for another slot's placeholder, and `$&`, `$'` and the other
+  // `$` patterns in the text stay literal (a string replacement expands them).
+  return prompt.replace(/\{\{([A-Z]+)\}\}/g, (match, name) => (Object.hasOwn(slots, name) ? slots[name] : match));
+}
+
+// Widget-authored text, made fit for a prompt and a terminal: at most `max`
+// characters, well-formed, on one line, no control characters, no backticks.
+function cleanText(text, max) {
+  return String(text).slice(0, max).toWellFormed()
+    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ")
+    .replace(/`/g, "'")
+    .trim();
+}
+
+const position = (v) => (Number.isInteger(v) && v >= 1 && v < 1_000_000 ? v : undefined);
+
+/**
+ * A fault arrives from the page, which got it from the widget, so check it
+ * again here: rebuild the four fields marzi defines, and nothing else.
+ */
+function readFault(raw) {
+  if (!raw || typeof raw !== "object" || typeof raw.message !== "string") {
+    throw new Error("missing 'fault' (the error the widget reported)");
   }
-  return prompt;
+  const line = position(raw.line);
+  return {
+    name: typeof raw.name === "string" ? cleanText(raw.name, 40) : "",
+    message: cleanText(raw.message, 300) || "no message",
+    line,
+    column: line === undefined ? undefined : position(raw.column),
+  };
+}
+
+/** The FAULT lines, as the header of prompts/widget-repair.md describes them. */
+function faultForPrompt({ name, message, line, column }) {
+  const where = line === undefined
+    ? "not reported"
+    : `line ${line}${column === undefined ? "" : `, column ${column}`} of the code above`;
+  return [name && `Error: ${name}`, `Message: ${message}`, `Where: ${where}`].filter(Boolean).join("\n");
 }
 
 /** Send a finished prompt to the model and parse the widget out of the reply. */
@@ -161,6 +197,35 @@ async function refine(request, previousBody) {
   }));
 }
 
+/**
+ * Repair a version whose code crashed. Both inputs are untrusted: the body is
+ * model-written code, and the fault is text the running widget produced
+ * (readFault has already rebuilt and cleaned it). The template frames both as
+ * material to work from, never as instructions.
+ */
+async function repair(previousBody, fault) {
+  return runModel(await buildPrompt("widget-repair.md", {
+    CAPABILITIES: catalogForPrompt(),
+    LIBRARIES: librariesForPrompt(),
+    PREVIOUS: previousBody,
+    FAULT: faultForPrompt(fault),
+  }));
+}
+
+/**
+ * Generation spends model credits, so only Ledger's own pages may ask for it.
+ * Another site can make the browser POST here, but only as a form or plain
+ * text: a JSON body needs a CORS preflight, which this server never grants.
+ * The Host check stops DNS rebinding (a foreign name that resolves to us).
+ */
+function fromOurPages(req) {
+  const host = req.headers.host ?? "";
+  if (host !== `127.0.0.1:${PORT}` && host !== `localhost:${PORT}`) return false;
+  const origin = req.headers.origin;
+  return (req.headers["content-type"] ?? "").startsWith("application/json")
+    && (!origin || origin === `http://${host}`);
+}
+
 function readBody(req) {
   return new Promise((ok, no) => {
     let data = "";
@@ -178,17 +243,29 @@ const server = createServer(async (req, res) => {
 
   const isGenerate = url.pathname === "/api/generate";
   const isRefine = url.pathname === "/api/refine";
-  if ((isGenerate || isRefine) && req.method === "POST") {
+  const isRepair = url.pathname === "/api/repair";
+  if ((isGenerate || isRefine || isRepair) && req.method === "POST") {
+    if (!fromOurPages(req)) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "refused: generation is only for Ledger's own pages" }));
+      return;
+    }
     try {
-      const { request, previous } = JSON.parse(await readBody(req));
-      if (typeof request !== "string" || !request.trim()) {
+      const { request, previous, fault } = JSON.parse(await readBody(req));
+      if (!isRepair && (typeof request !== "string" || !request.trim())) {
         throw new Error("missing 'request'");
       }
+      if (!isGenerate && (typeof previous !== "string" || !previous.trim())) {
+        throw new Error("missing 'previous' (the current version's body)");
+      }
       let widget;
-      if (isRefine) {
-        if (typeof previous !== "string" || !previous.trim()) {
-          throw new Error("missing 'previous' (the current version's body)");
-        }
+      if (isRepair) {
+        const clean = readFault(fault);
+        // The fault is widget text, so the log shows only its class and sizes.
+        console.log(`\n✚ repairing: ${clean.name || "error"}, ${clean.message.length}-char message` +
+          `${clean.line ? `, line ${clean.line}` : ""}`);
+        widget = await repair(previous, clean);
+      } else if (isRefine) {
         console.log(`\n↻ refining: ${request}`);
         widget = await refine(request, previous);
       } else {
