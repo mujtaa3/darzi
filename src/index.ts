@@ -173,6 +173,14 @@ export interface AuditEvent {
    */
   widgetId: string;
   method: string;
+  /**
+   * `dispatched` — the switchboard let the call through to its handler or the
+   * store. `refused` — it did not, or the call did not complete. One call can
+   * log `dispatched` and then `refused`, with the reason "timed out", "widget
+   * destroyed", "result not cloneable", "capability failed" (the handler
+   * threw) or "state operation failed" (the store threw). The refusal is
+   * audited before the widget is told.
+   */
   decision: "dispatched" | "refused";
   /** Present on refusal: why. Safe to show a developer, not a widget. */
   reason?: string;
@@ -531,6 +539,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       // Same posture as capability handlers: the real error is the host's to
       // see, never the widget's — messages can carry internal detail.
       console.error(`[marzi] ${method} failed:`, error);
+      audit({ widgetId: widget.id, method, decision: "refused", reason: "state operation failed" });
       return fail(id, RPC.INTERNAL_ERROR, "state operation failed");
     }
   }
@@ -675,8 +684,11 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       return ok(request.id, outcome);
     } catch (error) {
       // Never hand the widget a raw error: messages can carry internal detail.
-      // The real reason goes to the host's console, not across the wall.
+      // The real reason goes to the host's console, not across the wall. The
+      // audit says the call failed, before the widget hears about it, so a
+      // host can tell its own capability failing from a widget bug.
       console.error(`[marzi] capability "${request.method}" threw:`, error);
+      audit({ widgetId: widget.id, method: request.method, decision: "refused", reason: "capability failed" });
       return fail(request.id, RPC.INTERNAL_ERROR, "capability failed");
     }
   }
