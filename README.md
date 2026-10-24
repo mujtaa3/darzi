@@ -111,12 +111,13 @@ These three methods are the full in-frame API.
 **Getting the HTML.** marzi never calls a model. Your app calls the model:
 
 1. Replace the placeholders in `prompts/widget-author.md` (or
-   `widget-refine.md`) with your values.
+   `widget-refine.md`) with your values. Replace all placeholders in one pass,
+   so that the text of one value cannot fill another placeholder.
 2. Send the result to your model.
 3. Give the HTML that the model returns to `render`.
 
-The templates teach the model the rules of the jail. Both templates are in the
-package. On a server, find a template with
+The templates teach the model the rules of the jail. All three templates are in
+the package. On a server, find a template with
 `import.meta.resolve("marzi/prompts/widget-author.md")`, then read the file.
 
 To use a library such as a charting library, put a copy of its source code in
@@ -183,6 +184,53 @@ styles. If your app uses a strict CSP, give a less strict CSP only to the pages
 that show widgets. A later release may remove this requirement by loading the
 warden from a file.
 
+## When a widget breaks
+
+A model sometimes writes code that does not work. marzi reports each failure to
+your page as a fault, through the `onWidgetFault` option. A fault has one of
+two kinds:
+
+- `never-started`: the widget did not connect to the channel. The usual cause
+  is a CSP that blocks inline scripts (see "Your page's CSP").
+- `script-error`: the widget's code threw an error. A promise in the widget
+  that failed with no handler also gives this kind.
+
+A `script-error` fault can also have these fields:
+
+| Field | What |
+|---|---|
+| `message` | The error text, up to 300 characters |
+| `name` | The type of error, for example `TypeError` |
+| `line`, `column` | The position of the error in the widget HTML; line 1 is its first line |
+
+All these fields come from the widget, and a hostile widget can write any text
+into them. Show them as text, never as HTML. The text can contain your data,
+because browsers copy values into error messages.
+
+There is no `line` when the error occurred outside the widget HTML, for example
+in a library. A failed promise has no position. WebKit hides the details of an
+error that widget code throws: the message is "Script error." and there is no
+position. A failed promise keeps its message in all three browsers.
+
+When your capability handler throws, the audit log records the call as refused,
+with the reason `capability failed`. marzi records it before it sends the error
+to the widget. Thus your page can tell a failure in your handler from an error
+in the widget.
+
+**To repair a widget with your model:**
+
+1. Show a Repair button for a `script-error` fault.
+2. Do not show the button if the audit log recorded `capability failed` for
+   that widget just before the fault.
+3. When the user clicks the button, fill in `prompts/widget-repair.md` with the
+   widget HTML and the fault.
+4. Send the result to your model.
+5. Render the HTML that the model returns as the next version of the widget.
+
+The header of the template tells you how to write the fault into the prompt.
+Let the user start each repair. A widget can fail many times, and each repair
+is a call to your model.
+
 ## Try it
 
 In a clone of this repository, run these commands:
@@ -220,6 +268,10 @@ The witness is a server outside the browser that records the traffic it gets
 because you cannot trust a page to report on itself. Retries are off, so a test
 that passes by chance cannot hide a leak. A release gets a tag only when all
 tests pass.
+
+A probe in `tests/probes/` asks a real model to repair a widget whose error
+text contains an attack. The probe needs an API key, so `npm test` does not run
+it.
 
 ## Layout
 
