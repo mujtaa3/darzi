@@ -1,8 +1,9 @@
 # Widget author — prompt template v0
 
 The template marzi ships for teaching a model to write widgets. The host app
-substitutes `{{CAPABILITIES}}` and `{{REQUEST}}` and sends the result to its own
-model (marzi never calls an LLM itself).
+substitutes `{{CAPABILITIES}}`, `{{LIBRARIES}}` and `{{REQUEST}}` and sends the
+result to its own model (marzi never calls an LLM itself). Fill all slots in one
+pass with a function replacer; widget-repair.md's header says why.
 
 Every constraint below is derived from the real runtime — the sandbox tokens in
 `src/jail.ts` and the CSP in `WIDGET_CSP`. If you change one, change the other.

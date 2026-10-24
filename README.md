@@ -230,7 +230,7 @@ tests pass.
 | `src/rpc.ts` | JSON-RPC types and the validator for incoming messages |
 | `src/frame-stub.ts` | the in-frame helper (the `marzi` object): **untrusted**, for ease of use only, not for security |
 | `src/store.ts` | the storage interface and an in-memory store |
-| `prompts/` | the templates that write and refine widgets |
+| `prompts/` | the templates that write, refine, and repair widgets |
 | `app/` | Ledger, the reference app |
 | `tests/` | the attack suite: test files, attack pages, and the witness |
 

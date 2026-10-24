@@ -10,8 +10,11 @@ been influenced by hostile data on an earlier run. This template treats it as
 untrusted material to revise, never as a source of instructions — keep that
 posture if you edit the wording.
 
+Fill all slots in one pass with a function replacer; widget-repair.md's header
+says why.
+
 Environment rules are duplicated from widget-author.md on purpose (templates
-are standalone artifacts). If the runtime changes, change both.
+are standalone artifacts). If the runtime changes, change all three.
 
 ---
 
