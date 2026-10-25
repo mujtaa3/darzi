@@ -1,8 +1,7 @@
 /**
- * The runtime: `createRuntime`, the capability registry and the switchboard.
- *
- * Everything here runs on the host side, in the app's page. The public types
- * are in types/, and index.ts lists what a host can import.
+ * The runtime, on the host side. The app calls `createRuntime` once, then
+ * `render` for each widget. The switchboard, `handleMessage`, checks each
+ * message that a widget sends.
  */
 
 // The `.js` extension is necessary, although these files are `.ts`.
@@ -40,12 +39,19 @@ import type { Runtime, RuntimeOptions } from "./types/runtime.js";
 import type { LiveWidget, RenderOptions, Widget, WidgetBody } from "./types/widget.js";
 
 /**
- * Create a runtime with the app's capabilities.
+ * Create a runtime with the app's capabilities. The app calls this once.
  *
  * The capabilities belong to the app, not to one widget: each widget gets the
  * same list, and in 0.1.0 each widget can call each capability.
+ *
+ * It throws at once for a bad option, so that a host error shows at setup,
+ * not later inside a widget.
  */
 export function createRuntime(options: RuntimeOptions): Runtime {
+  // ── Setup: runs once, when the app calls createRuntime ─────────────────────
+
+  // The registry: capability name → capability. The switchboard looks up each
+  // call here.
   const registry = new Map<string, Capability>();
   for (const capability of options.capabilities) {
     // The runtime keeps names that start with "marzi/" for its own messages
@@ -63,6 +69,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     registry.set(capability.name, capability);
   }
 
+  // The forbidden text that `render` checks. A copy, so that a later change to
+  // the host's list does not change this runtime.
   const forbiddenText = [...(options.forbiddenText ?? DEFAULT_FORBIDDEN_TEXT)];
   for (const entry of forbiddenText) {
     // An empty entry would match every widget HTML, so render would refuse all of them.
@@ -71,6 +79,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     }
   }
 
+  // The libraries: name → source text. `render` adds the ones a widget names.
   const libraries = new Map<string, string>();
   for (const lib of options.libraries ?? []) {
     if (libraries.has(lib.name)) {
@@ -82,7 +91,13 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   /** The ids of the widgets that are rendered and not yet destroyed. */
   const liveIds = new Set<string>();
 
-  /** Send a decision to `onAudit`. A listener that throws cannot stop the switchboard. */
+  // ── Reporting to the host: the two callbacks ───────────────────────────────
+
+  /**
+   * Send a decision to `onAudit`, with the marzi `VERSION` added. Without
+   * `onAudit`, it does nothing. A listener that throws cannot stop the
+   * switchboard: the error goes to the console.
+   */
   function audit(event: Omit<AuditEvent, "version">): void {
     if (!options.onAudit) return;
     try {
@@ -92,7 +107,11 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     }
   }
 
-  /** Send a fault to `onWidgetFault`. A listener that throws cannot stop the runtime. */
+  /**
+   * Send a fault to `onWidgetFault`. Without `onWidgetFault`, the fault goes
+   * to the console, so that a broken widget is never silent. A listener that
+   * throws cannot stop the runtime.
+   */
   function reportFault(fault: WidgetFault): void {
     if (!options.onWidgetFault) {
       console.warn(`[marzi] widget ${fault.widgetId} ${fault.kind}:`, fault.message);
@@ -106,17 +125,24 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   }
 
   /**
-   * Make a WidgetFault from a widget's `marzi/fault` notification.
+   * Turn a widget's `marzi/fault` notification into a WidgetFault, and send
+   * it to `onWidgetFault`.
    *
-   * Each field is a claim. The runtime reads only the four known fields, and
-   * drops a field that has the wrong type. It limits the text here, on the
-   * host side: the stub limits it too, but the stub is inside the jail, so it
-   * is not reliable. The runtime changes the line from a line of the frame's
-   * document into a line of the widget HTML. It drops a position outside the
-   * widget HTML (in the stub or a library). The id comes from the port, as for
-   * every message.
+   * The stub sends a fault when the widget's code throws. But the widget can
+   * also send a fault itself, with any values, so each field is only a claim.
+   * The runtime builds a NEW fault from four known fields, and checks each one:
+   *   - `message`: a string, cut to 300 characters; otherwise "unknown error";
+   *   - `name`: a non-empty string, cut to 40 characters; otherwise left out;
+   *   - `line`: a whole number inside the widget HTML; otherwise left out;
+   *   - `column`: a whole number, kept only when `line` is kept.
+   *
+   * The stub also cuts the text, but the stub is inside the jail, so the host
+   * cannot rely on it. The widget id comes from the port, never from the
+   * fault, as for every message.
    */
   function reportScriptError(widget: LiveWidget, params: unknown): void {
+    // Read the params as a plain record. Anything that is not an object gives
+    // an empty record, so each field below is then missing.
     const claim = (typeof params === "object" && params !== null ? params : {}) as Record<string, unknown>;
     const message = claim["message"];
     const fault: WidgetFault = {
@@ -129,10 +155,17 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     const name = claim["name"];
     if (typeof name === "string" && name !== "") fault.name = clampText(name, MAX_FAULT_NAME);
 
+    // The browser counts lines in the whole frame document, and the stub and
+    // the libraries come before the widget HTML. bodyLines says where the
+    // widget HTML starts and ends, so subtract its first line to get a line of
+    // the widget HTML (1-based). A line outside the widget HTML is in the stub
+    // or a library, so it would mean nothing to the host: leave it out.
     const line = position(claim["line"]);
     const { first, last } = widget.bodyLines;
     if (line !== undefined && line >= first && line <= last) {
       fault.line = line - first + 1;
+      // The column needs no change: the widget HTML starts at column 1 of its
+      // first line.
       const column = position(claim["column"]);
       if (column !== undefined) fault.column = column;
     }
@@ -140,13 +173,17 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     reportFault(fault);
   }
 
+  // ── The switchboard: runs for each message from a widget ───────────────────
+
+  // The limits that the switchboard uses for each message. Read once, here.
   const rateLimit = options.rateLimit ?? DEFAULT_RATE_LIMIT;
   const stateLimit = options.stateLimitBytes ?? DEFAULT_STATE_LIMIT_BYTES;
 
   /**
    * The deadline for each call that leaves the switchboard, to a capability
    * handler or to the store. It aborts after `callTimeoutMs`, or when the
-   * widget is destroyed.
+   * widget is destroyed, whichever comes first. A new signal for each call,
+   * so that each call gets its own full deadline.
    */
   function callSignal(widget: LiveWidget): AbortSignal {
     return AbortSignal.any([
@@ -169,6 +206,9 @@ export function createRuntime(options: RuntimeOptions): Runtime {
    * code that marzi does not control. A store that hangs must not keep the
    * call open, or finish a write after the widget is destroyed. The store gets
    * the signal, so that a store on the network can cancel its request.
+   *
+   * The state is keyed by `widget.id`, which comes from the port. So a widget
+   * can read and write only its own state.
    */
   async function handleState(
     widget: LiveWidget,
@@ -177,6 +217,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     rawParams: unknown,
     signal: AbortSignal,
   ): Promise<RpcResponse> {
+    // Two small helpers for the two kinds of failure. Each one records the
+    // refusal in the audit first, then makes the error reply.
     const refuse = (reason: string): RpcResponse => {
       audit({ widgetId: widget.id, method, decision: "refused", reason });
       return fail(id, RPC.INVALID_REQUEST, reason);
@@ -189,6 +231,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     if (!options.store) return refuse("no store configured");
 
     try {
+      // Load: ask the store for the saved JSON, and parse it. null means that
+      // nothing was saved.
       if (method === "marzi/loadState") {
         audit({ widgetId: widget.id, method, decision: "dispatched" });
         const json = await untilAborted(options.store.getState(widget.id, signal), signal);
@@ -196,6 +240,9 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         return ok(id, json === null ? null : JSON.parse(json));
       }
 
+      // Save: clean the params, take `params.value` (the stub sends
+      // `{ value }`), turn it into JSON, check its size, then give it to the
+      // store.
       const params = sanitizeParams(rawParams);
       if (!params.ok) return refuse(`state rejected: ${params.reason}`);
       const value = (params.value as { value?: unknown } | null)?.value ?? null;
@@ -235,9 +282,19 @@ export function createRuntime(options: RuntimeOptions): Runtime {
    * The caller gives `widget`: it is the port's own message handler. The
    * runtime never reads the widget from the message. So a widget cannot claim
    * to be a different widget: it has no field to lie in.
+   *
+   * It returns the reply to send, or null for no reply. The gates, in order:
+   *   1. the rate limit;
+   *   2. notifications (marzi/fault), which never get a reply;
+   *   3. the shape of the request;
+   *   4. the built-in state methods;
+   *   5. the capability lookup;
+   *   6. the params check;
+   *   7. the audit records "dispatched", and the handler runs with a deadline;
+   *   8. the result must be possible to send across the port.
    */
   async function handleMessage(widget: LiveWidget, raw: unknown): Promise<RpcResponse | null> {
-    // The rate limit comes first, for EVERY message. A widget can flood with
+    // 1. The rate limit comes first, for EVERY message. A widget can flood with
     // notifications and junk as easily as with requests, and any work before
     // this check would be free work for an attacker.
     if (!withinRate(widget.rate, Date.now(), rateLimit.calls, rateLimit.windowMs)) {
@@ -257,15 +314,16 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       return flooded ? fail(flooded.id, RPC.RATE_LIMITED, "rate limited") : null;
     }
 
-    // Notifications come next. They have no id, so they get no reply, and they
-    // can never reach a capability. The runtime knows only one; it drops any
-    // other.
+    // 2. Notifications come next. They have no id, so they get no reply, and
+    // they can never reach a capability. The runtime knows only one; it drops
+    // any other.
     const notification = parseNotification(raw);
     if (notification !== null) {
       if (notification.method === "marzi/fault") reportScriptError(widget, notification.params);
       return null;
     }
 
+    // 3. The shape of the request.
     const request = parseRequest(raw);
     if (request === null) {
       // A malformed message has no id to answer, so the only safe action is to
@@ -280,14 +338,16 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       return null;
     }
 
-    // The built-in state methods come before the registry. They are part of
-    // the runtime, not app capabilities, and grants will apply only to the
+    // 4. The built-in state methods come before the registry. They are part
+    // of the runtime, not app capabilities, and grants will apply only to the
     // registry. The widget id for the state comes from the port, never from
     // the message, so a widget cannot read or write another widget's state.
     if (request.method === "marzi/saveState" || request.method === "marzi/loadState") {
       return handleState(widget, request.id, request.method, request.params, callSignal(widget));
     }
 
+    // 5. The capability lookup. In 0.1.0, a registered name is the only
+    // permission that a call needs.
     const capability = registry.get(request.method);
     if (capability === undefined) {
       audit({
@@ -299,10 +359,10 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       return fail(request.id, RPC.METHOD_NOT_FOUND, `no such capability: ${request.method}`);
     }
 
-    // The params come in from the widget here. sanitizeParams builds a new
+    // 6. The params come in from the widget here. sanitizeParams builds a new
     // copy: it drops the keys that change prototypes (__proto__, constructor,
-    // prototype), and limits depth, count and size (see helpers/rpc.ts). So whatever
-    // a handler does with the params, that attack is already gone.
+    // prototype), and limits depth, count and size (see helpers/rpc.ts). So
+    // whatever a handler does with the params, that attack is already gone.
     const params = sanitizeParams(request.params);
     if (!params.ok) {
       audit({
@@ -315,6 +375,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       return fail(request.id, RPC.INVALID_REQUEST, `params rejected: ${params.reason}`);
     }
 
+    // 7. All checks passed: record "dispatched", then run the handler. If the
+    // call fails later, the audit records "refused" too, with the reason.
     audit({ widgetId: widget.id, method: request.method, decision: "dispatched" });
 
     // Two separate protections, for two different failures:
@@ -331,6 +393,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     const signal = callSignal(widget);
 
     try {
+      // Promise.resolve lets a handler return a plain value or a promise.
       const outcome = await untilAborted(
         Promise.resolve(capability.handler(params.value, { signal })),
         signal,
@@ -342,7 +405,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         return fail(request.id, RPC.TIMEOUT, "capability timed out");
       }
 
-      // The reply crosses the port as a structured clone, and some values
+      // 8. The reply crosses the port as a structured clone, and some values
       // cannot be cloned: functions, promises, a fetch Response. postMessage
       // would then throw later, outside this try, after the audit said
       // "dispatched", and the widget would wait for the stub's backstop. So
@@ -363,15 +426,18 @@ export function createRuntime(options: RuntimeOptions): Runtime {
 
       return ok(request.id, outcome);
     } catch (error) {
-      // Never give the widget the real error, because error messages can
-      // contain internal details. The real error goes to the host's console.
-      // The audit records the failure before the widget hears of it, so the
-      // host can tell its own failure from a widget bug.
+      // The handler threw, or its promise failed. Never give the widget the
+      // real error, because error messages can contain internal details. The
+      // real error goes to the host's console. The audit records the failure
+      // before the widget hears of it, so the host can tell its own failure
+      // from a widget bug.
       console.error(`[marzi] capability "${request.method}" threw:`, error);
       audit({ widgetId: widget.id, method: request.method, decision: "refused", reason: "capability failed" });
       return fail(request.id, RPC.INTERNAL_ERROR, "capability failed");
     }
   }
+
+  // ── render: runs once for each widget ──────────────────────────────────────
 
   /**
    * Render widget HTML into `container`, and return the widget's handle.
@@ -387,8 +453,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
    * The returned `destroy()` undoes all of this.
    */
   function render(body: WidgetBody, container: HTMLElement, renderOptions?: RenderOptions): Widget {
-    // A saved widget renders with its record id. That id lets its saved state
-    // find it again.
+    // Step 1. A saved widget renders with its record id. That id lets its
+    // saved state find it again. Without an id, the widget is temporary.
     const id = renderOptions?.id ?? newWidgetId();
 
     // One live widget for each id. Two frames with one id would share one
@@ -398,9 +464,10 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       throw new Error(`widget "${id}" is already rendered — destroy it before rendering it again`);
     }
 
-    // Forbidden text: refuse the widget if its HTML contains a listed sequence
-    // anywhere. The runtime only refuses; it never changes the widget HTML. It
-    // does this before it changes the page, so a refused widget leaves nothing.
+    // Step 2. Forbidden text: refuse the widget if its HTML contains a listed
+    // sequence anywhere. The runtime only refuses; it never changes the widget
+    // HTML. It does this before it changes the page, so a refused widget
+    // leaves nothing.
     const hit = forbiddenText.find((entry) => body.includes(entry));
     if (hit !== undefined) {
       audit({ widgetId: id, method: "(forbidden text)", decision: "refused", reason: `widget HTML contains "${hit}"` });
@@ -419,6 +486,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       return source;
     });
 
+    // Step 3. The outer frame. It is not in the page yet (see step 5).
     const frame = document.createElement("iframe");
 
     // This frame is the WARDEN: marzi's frame, with no script. The widget's
@@ -438,11 +506,13 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     frame.setAttribute("allow", FRAME_ALLOW);
     frame.setAttribute("referrerpolicy", FRAME_REFERRER_POLICY);
 
+    // The two documents: `scaffold` builds the widget's document (CSP, stub,
+    // libraries, widget HTML); `warden` puts it inside the outer document.
     const composed = scaffold(body, libSources);
     frame.srcdoc = warden(composed.html);
 
-    // The channel. port1 stays here. port2 goes to the widget, and becomes its
-    // only way to reach the runtime.
+    // Step 4. The channel. port1 stays here. port2 goes to the widget, and
+    // becomes its only way to reach the runtime.
     const channel = new MessageChannel();
 
     // Made HERE, in the closure that owns the port. The runtime finds who sent
@@ -458,7 +528,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     };
 
     // Each message from the widget goes to the switchboard, and the reply, if
-    // any, goes back on the same port.
+    // any, goes back on the same port. `void` marks that nothing waits for
+    // this promise; the `.catch` keeps an error from becoming unhandled.
     channel.port1.onmessage = (event: MessageEvent): void => {
       void handleMessage(widget, event.data)
         .then((response) => {
@@ -491,6 +562,10 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       // Answer once, and stop listening. Never send a second port: it would be
       // a second line into the same jail that nothing tracks. The port goes
       // straight to the widget's window; the warden never touches it.
+      //
+      // `startTimer` is declared below this function. That is safe: a
+      // "ready" message can arrive only after `render` returns, and by then
+      // `startTimer` exists.
       portIssued = true;
       clearTimeout(startTimer);
       window.removeEventListener("message", onKnock);
@@ -507,8 +582,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       reportFault({ widgetId: id, kind: "never-started", message: "widget did not complete its handshake" });
     }, options.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS);
 
-    // Add the frame last. It starts to load only when it is in the page, so
-    // everything above is ready before any widget code runs.
+    // Step 5. Add the frame last. It starts to load only when it is in the
+    // page, so everything above is ready before any widget code runs.
     container.appendChild(frame);
 
     // Record the id last, so that a render that threw above never holds it.
@@ -526,8 +601,10 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         liveIds.delete(id);
 
         // Abort first. Each call in progress gets its signal, so handlers that
-        // listen can stop their work.
+        // listen can stop their work, and the runtime stops waiting for them.
         widget.lifetime.abort(new DOMException("widget destroyed", "AbortError"));
+        // Then release the rest, in the reverse order of render: the start
+        // timer, the "ready" listener, the channel, and the frame.
         clearTimeout(startTimer);
         window.removeEventListener("message", onKnock);
         channel.port1.onmessage = null;
