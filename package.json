@@ -39,7 +39,6 @@
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
     "@playwright/test": "^1.63.0",
-    "chart.js": "^4.5.1",
     "typescript": "^5.7.2"
   }
 }

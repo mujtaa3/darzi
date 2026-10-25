@@ -7,7 +7,7 @@
   window.__log = [];
   const log = (s) => window.__log.push(s);
 
-  // Chart.js 4.5.1, the same bytes as node_modules/chart.js/dist/chart.umd.js.
+  // Chart.js 4.5.1: dist/chart.umd.js from the chart.js npm package, copied in.
   // The suite keeps its own copy, so no app is needed to run it.
   const chartSrc = await fetch("/tests/fixtures/chart.umd.js").then((r) => r.text());
   // A library whose source contains the closing script tag inside a string.
