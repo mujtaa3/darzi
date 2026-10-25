@@ -258,9 +258,12 @@ it.
 
 | Path | What |
 |---|---|
-| `src/index.ts` | `createRuntime`, the registry, and the switchboard |
+| `src/index.ts` | the public API: each name that you can import |
+| `src/runtime.ts` | `createRuntime`, the registry, and the switchboard |
+| `src/types/` | the types: capabilities, widgets, the audit, faults and the runtime options (public), and the JSON-RPC messages in `rpc.ts` (internal) |
+| `src/consts/` | the constants: `jail.ts`, `rpc.ts` and `runtime.ts` |
+| `src/helpers/` | the helper functions: `jail.ts`, and `rpc.ts` (the JSON-RPC replies, the message checks, the rate limit and the params cleaner) |
 | `src/jail.ts` | the sandbox tokens, the CSP, the warden, and how marzi builds the frame document |
-| `src/rpc.ts` | JSON-RPC types and the validator for incoming messages |
 | `src/frame-stub.ts` | the in-frame helper (the `marzi` object): **untrusted**, for ease of use only, not for security |
 | `src/store.ts` | the storage interface and an in-memory store |
 | `prompts/` | the templates that write, refine, and repair widgets |
