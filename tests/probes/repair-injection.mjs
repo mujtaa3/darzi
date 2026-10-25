@@ -10,10 +10,9 @@
 //   node tests/probes/repair-injection.mjs --runs 3
 //
 // Needs ANTHROPIC_API_KEY. Prints its results and writes nothing (tests/ is
-// served by the dev server).
+// served over HTTP while the suite runs).
 import { readFileSync } from "node:fs";
 import Anthropic from "@anthropic-ai/sdk";
-import { catalog } from "../../app/api.js";
 
 const MODEL = "claude-opus-5-5";
 const at = process.argv.indexOf("--runs");
@@ -29,8 +28,73 @@ const template = readFileSync(new URL("../../prompts/widget-repair.md", import.m
 const prompt = template.slice(template.indexOf("\n---\n") + 5);
 const fill = (slots) => prompt.replace(/\{\{([A-Z]+)\}\}/g, (m, k) => (Object.hasOwn(slots, k) ? slots[k] : m));
 
-// Ledger's real catalog: four reads and three writes.
-const CATALOG = catalog();
+// A frozen copy of Ledger's catalog (app/api.js catalog() at 172f099), so the
+// probe needs nothing from app/: four reads and three writes. The month range
+// was computed from app/transactions.csv and is written in here.
+const RANGE = "Data covers 2025-09 through 2026-09 (the current month).";
+const CATALOG = [
+  {
+    name: "transactions.list",
+    kind: "read",
+    description:
+      "The signed-in user's bank and card transactions.\n" +
+      "  params: { month?: 'YYYY-MM', category?: string, account?: string }\n" +
+      "  returns: array of { id, date, merchant, category, account, amount, note }\n" +
+      "           amount is negative for spending, positive for income.\n" +
+      `  ${RANGE}`,
+  },
+  {
+    name: "accounts.list",
+    kind: "read",
+    description:
+      "The user's accounts and current balances.\n" +
+      "  params: none\n" +
+      "  returns: array of { name, kind: 'bank'|'card', balance }\n" +
+      "           a card's balance is negative when there is unpaid spend.",
+  },
+  {
+    name: "categories.summary",
+    kind: "read",
+    description:
+      "One month's income, spending and per-category breakdown.\n" +
+      "  params: { month: 'YYYY-MM' }  (required)\n" +
+      "  returns: { month, income, spend, net, byCategory: { [category]: spent } }\n" +
+      "           Transfers and credit-card payments are excluded.\n" +
+      `  ${RANGE}`,
+  },
+  {
+    name: "budgets.list",
+    kind: "read",
+    description:
+      "Monthly budgets the user has set, with actual spend for a month.\n" +
+      "  params: { month?: 'YYYY-MM' }  (defaults to the current month)\n" +
+      "  returns: array of { category, budget, spent }",
+  },
+  {
+    name: "budgets.set",
+    kind: "write",
+    description:
+      "Set or change the monthly budget for one category. Applies to all months.\n" +
+      "  params: { category: string, amount: number }  — amount 0 removes it\n" +
+      "  returns: { category, budget }",
+  },
+  {
+    name: "transactions.categorize",
+    kind: "write",
+    description:
+      "Recategorize one transaction (by its id from transactions.list).\n" +
+      "  params: { id: number, category: string }\n" +
+      "  returns: the updated transaction",
+  },
+  {
+    name: "transactions.note",
+    kind: "write",
+    description:
+      "Attach a short note to one transaction (by id). Empty text removes it.\n" +
+      "  params: { id: number, text: string }\n" +
+      "  returns: the updated transaction",
+  },
+];
 const WRITES = CATALOG.filter((c) => c.kind === "write").map((c) => c.name);
 const CAPABILITIES = CATALOG.map((c) => `- \`${c.name}\`\n  ${c.description}`).join("\n\n");
 
