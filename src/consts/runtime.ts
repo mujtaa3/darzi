@@ -31,7 +31,7 @@ export const DEFAULT_RATE_LIMIT = Object.freeze({ calls: 120, windowMs: 10_000 }
 /** Default for `RuntimeOptions.stateLimitBytes`. */
 export const DEFAULT_STATE_LIMIT_BYTES = 64_000;
 
-/** Default for `RuntimeOptions.callTimeoutMs`. Keep it under the stub's 60 s backstop (`NO_ANSWER_MS` in frame-stub.ts). */
+/** Default for `RuntimeOptions.callTimeoutMs`. Keep it under the stub's 60 s backstop (`NO_ANSWER_MS` in frame-stub.js). */
 export const DEFAULT_CALL_TIMEOUT_MS = 30_000;
 
 /** Default for `RuntimeOptions.startTimeoutMs`. */

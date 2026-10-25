@@ -7,7 +7,7 @@
  *
  * This file is the whole public API: every name a host can import is listed
  * here, and nothing else. The runtime is in runtime.ts, the types in types/,
- * the constants in consts/, the helpers in helpers/, and the storage contract
+ * the constants in consts/, the helpers in helpers/, and the in-memory store
  * in store.ts. types/ also holds internal types; only the names below are
  * public.
  */
@@ -21,10 +21,4 @@ export type { AuditEvent } from "./types/audit.js";
 export type { WidgetFault } from "./types/fault.js";
 export type { Runtime, RuntimeOptions } from "./types/runtime.js";
 export type { Library, RenderOptions, Widget, WidgetBody } from "./types/widget.js";
-export type {
-  StateStore,
-  WidgetRecord,
-  WidgetStore,
-  WidgetSummary,
-  WidgetVersion,
-} from "./store.js";
+export type { StateStore, WidgetRecord, WidgetStore, WidgetSummary, WidgetVersion } from "./types/store.js";

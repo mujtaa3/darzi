@@ -7,7 +7,7 @@
  * ../runtime.ts.
  */
 
-import type { StateStore } from "../store.js";
+import type { StateStore } from "./store.js";
 import type { AuditEvent } from "./audit.js";
 import type { Capability } from "./capability.js";
 import type { WidgetFault } from "./fault.js";
