@@ -1,6 +1,7 @@
 /**
  * The runtime's constants: the version, the default forbidden text, the
- * default limits of `RuntimeOptions`, and the limits on fault text.
+ * default limits of `RuntimeOptions`, the limits on fault text, and the UTF-8
+ * encoder that measures saved state.
  */
 
 /** Library version, exported so a host can record which marzi produced a log line or a saved widget. */
@@ -46,3 +47,6 @@ export const MAX_POSITION = 1_000_000;
 export const MAX_FAULT_MESSAGE = 300;
 /** Longest error class name we will carry ("TypeError" is 9). */
 export const MAX_FAULT_NAME = 40;
+
+/** Measures saved state in UTF-8 bytes, the unit that stores count. */
+export const UTF8 = new TextEncoder();

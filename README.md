@@ -260,9 +260,9 @@ it.
 |---|---|
 | `src/index.ts` | the public API: each name that you can import |
 | `src/runtime.ts` | `createRuntime`, the registry, and the switchboard |
-| `src/types/` | the types: capabilities, widgets, the audit, faults and the runtime options (public), and the JSON-RPC messages in `rpc.ts` (internal) |
+| `src/types/` | the types: capabilities, widgets, the audit, faults and the runtime options (public), and the internal types in `rpc.ts`, `jail.ts` and `widget.ts` (`LiveWidget`) |
 | `src/consts/` | the constants: `jail.ts`, `rpc.ts` and `runtime.ts` |
-| `src/helpers/` | the helper functions: `jail.ts`, and `rpc.ts` (the JSON-RPC replies, the message checks, the rate limit and the params cleaner) |
+| `src/helpers/` | the helper functions: `jail.ts`, `rpc.ts` (the JSON-RPC replies, the message checks, the rate limit and the params cleaner) and `runtime.ts` (the deadline wait, the fault cleaners and the widget id) |
 | `src/jail.ts` | the sandbox tokens, the CSP, the warden, and how marzi builds the frame document |
 | `src/frame-stub.js` | the in-frame helper (the `marzi` object): **untrusted**, for ease of use only, not for security. `npm run build` copies it into `src/frame-stub.ts` as a string. |
 | `src/store.ts` | the storage interface and an in-memory store |

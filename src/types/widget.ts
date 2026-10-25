@@ -1,9 +1,12 @@
 /**
  * Widgets: the HTML that a host renders, the libraries that it can add to the
- * frame, and the handle that `render` returns.
+ * frame, the handle that `render` returns, and the runtime's own record of a
+ * rendered widget (`LiveWidget`, internal).
  *
  * Types only. TypeScript removes them at compile time.
  */
+
+import type { RateWindow } from "./rpc.js";
 
 /**
  * A widget's HTML, exactly as the model wrote it.
@@ -63,4 +66,21 @@ export interface Widget {
   frame: HTMLIFrameElement;
   /** Stop listening, and remove the widget. */
   destroy(): void;
+}
+
+/**
+ * What the runtime knows about one rendered widget. Internal: index.ts does
+ * not export it, and a host never sees it. `render` makes one for each widget.
+ */
+export interface LiveWidget {
+  id: string;
+  frame: HTMLIFrameElement;
+  /** The host's end of the widget's channel. It is also the widget's identity. */
+  port: MessagePort;
+  /** Aborted when the widget is destroyed, so that calls in progress stop too. */
+  lifetime: AbortController;
+  /** The counter for the rate limit (see RuntimeOptions.rateLimit). */
+  rate: RateWindow;
+  /** The lines of the frame's document that hold the widget HTML, for fault lines. */
+  bodyLines: { first: number; last: number };
 }

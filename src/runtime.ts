@@ -18,9 +18,10 @@ import {
   DEFAULT_STATE_LIMIT_BYTES,
   MAX_FAULT_MESSAGE,
   MAX_FAULT_NAME,
-  MAX_POSITION,
+  UTF8,
   VERSION,
 } from "./consts/runtime.js";
+import { abandonReason, clampText, newWidgetId, position, untilAborted } from "./helpers/runtime.js";
 import { scaffold, warden } from "./jail.js";
 import {
   fail,
@@ -31,79 +32,12 @@ import {
   sanitizeParams,
   withinRate,
 } from "./helpers/rpc.js";
-import type { RateWindow, RpcId, RpcResponse } from "./types/rpc.js";
+import type { RpcId, RpcResponse } from "./types/rpc.js";
 import type { Capability } from "./types/capability.js";
 import type { AuditEvent } from "./types/audit.js";
 import type { WidgetFault } from "./types/fault.js";
 import type { Runtime, RuntimeOptions } from "./types/runtime.js";
-import type { RenderOptions, Widget, WidgetBody } from "./types/widget.js";
-
-/** What the runtime knows about one rendered widget. */
-interface LiveWidget {
-  id: string;
-  frame: HTMLIFrameElement;
-  /** The host's end of the widget's channel. It is also the widget's identity. */
-  port: MessagePort;
-  /** Aborted when the widget is destroyed, so that calls in progress stop too. */
-  lifetime: AbortController;
-  /** The counter for the rate limit (see RuntimeOptions.rateLimit). */
-  rate: RateWindow;
-  /** The lines of the frame's document that hold the widget HTML, for fault lines. */
-  bodyLines: { first: number; last: number };
-}
-
-/** Measures saved state in UTF-8 bytes, the unit that stores count. */
-const UTF8 = new TextEncoder();
-
-/**
- * Wait for `work`, but stop waiting when `signal` aborts, even if the work
- * ignores the signal. Then return ABANDONED.
- */
-function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T | typeof ABANDONED> {
-  // A signal that is already aborted never fires "abort" again, so answer now.
-  if (signal.aborted) return Promise.resolve(ABANDONED);
-  return Promise.race([
-    work,
-    new Promise<typeof ABANDONED>((resolve) => {
-      signal.addEventListener("abort", () => resolve(ABANDONED), { once: true });
-    }),
-  ]);
-}
-
-/** Why the runtime stopped waiting for a call. For the audit only; the widget never sees it. */
-function abandonReason(widget: LiveWidget): string {
-  return widget.lifetime.signal.aborted ? "widget destroyed" : "timed out";
-}
-
-/**
- * Cut widget text to `max` UTF-16 units or fewer, without splitting a
- * surrogate pair. JavaScript counts string length in UTF-16 units, and a
- * character outside the Basic Multilingual Plane (most emoji) takes two. A cut
- * between the two would give the host broken text that marzi itself made.
- */
-function clampText(text: string, max: number): string {
-  if (text.length <= max) return text;
-  const cut = text.slice(0, max);
-  const last = cut.charCodeAt(cut.length - 1);
-  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
-}
-
-/** A line or column that a widget reported: a positive whole number, or nothing. */
-function position(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value < MAX_POSITION
-    ? value
-    : undefined;
-}
-
-/** Make an id for a widget that was rendered without one. */
-function newWidgetId(): string {
-  // randomUUID needs a secure context. localhost is one, but the fallback stops
-  // a plain-http test server from throwing.
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `w_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
-}
+import type { LiveWidget, RenderOptions, Widget, WidgetBody } from "./types/widget.js";
 
 /**
  * Create a runtime with the app's capabilities.

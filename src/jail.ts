@@ -23,6 +23,7 @@
 import { FRAME_ALLOW, FRAME_REFERRER_POLICY, SANDBOX_TOKENS, WARDEN_CSP, WIDGET_CSP } from "./consts/jail.js";
 import { FRAME_STUB } from "./frame-stub.js";
 import { attributeSafe, inlineScriptSafe, lineBreaks } from "./helpers/jail.js";
+import type { Scaffold } from "./types/jail.js";
 
 /**
  * Put the model's HTML into a document whose head marzi writes.
@@ -73,14 +74,6 @@ ${libs}  </head>
     html: beforeBody + body + afterBody,
     bodyLines: { first, last: first + lineBreaks(body) },
   };
-}
-
-/** A composed widget document, and the lines of it that hold the widget HTML. */
-export interface Scaffold {
-  /** The complete document, ready to put in the warden. */
-  html: string;
-  /** The first and the last document line of the widget HTML. 1-based; both lines included. */
-  bodyLines: { first: number; last: number };
 }
 
 /**
