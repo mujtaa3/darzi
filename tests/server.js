@@ -3,8 +3,7 @@
  *
  * A test page needs only itself and the built runtime it imports
  * (/dist/index.js). No page calls an API, so this server has no routes, no
- * model client and no app data: the suite depends on nothing in app/ or in
- * the demo server (../server.js).
+ * model client and no app data.
  *
  * The pages must come from a real http origin rather than file://, because
  * browsers do not load module scripts from file URLs.

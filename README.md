@@ -231,25 +231,6 @@ The header of the template tells you how to write the fault into the prompt.
 Let the user start each repair. A widget can fail many times, and each repair
 is a call to your model.
 
-## Try it
-
-In a clone of this repository, run these commands:
-
-```bash
-npm install && npm run build
-node --env-file=.env server.js        # → http://127.0.0.1:8000/
-```
-
-This starts Ledger, a small finance app that uses a CSV file of transactions.
-In Ledger, you describe a widget and see the model write it. You can save the
-widget, refine it, and restore an earlier version. Ledger is the reference
-example for how to connect capabilities, libraries, storage, and the audit log.
-
-To generate widgets, put `ANTHROPIC_API_KEY` in `.env`. Only the server reads
-this key. The `demo/` folder has the older single-purpose pages. These include
-the self-navigation leak and the listener that proves if anything left the
-machine.
-
 ## The attack suite
 
 ```bash
@@ -283,7 +264,6 @@ it.
 | `src/frame-stub.ts` | the in-frame helper (the `marzi` object): **untrusted**, for ease of use only, not for security |
 | `src/store.ts` | the storage interface and an in-memory store |
 | `prompts/` | the templates that write, refine, and repair widgets |
-| `app/` | Ledger, the reference app |
 | `tests/` | the attack suite: test files, attack pages, and the witness |
 
 marzi has no runtime dependencies.

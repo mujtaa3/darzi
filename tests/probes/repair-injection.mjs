@@ -28,9 +28,9 @@ const template = readFileSync(new URL("../../prompts/widget-repair.md", import.m
 const prompt = template.slice(template.indexOf("\n---\n") + 5);
 const fill = (slots) => prompt.replace(/\{\{([A-Z]+)\}\}/g, (m, k) => (Object.hasOwn(slots, k) ? slots[k] : m));
 
-// A frozen copy of Ledger's catalog (app/api.js catalog() at 172f099), so the
-// probe needs nothing from app/: four reads and three writes. The month range
-// was computed from app/transactions.csv and is written in here.
+// A frozen copy of the catalog of Ledger, the finance demo that this repo
+// carried until f68f6b8 (app/api.js catalog()): four reads and three writes.
+// The month range was computed from its transactions CSV and is written in here.
 const RANGE = "Data covers 2025-09 through 2026-09 (the current month).";
 const CATALOG = [
   {
