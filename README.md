@@ -163,9 +163,9 @@ marzi does not promise these things:
 - Nothing checks that a widget's *numbers* are correct.
 
 To catch the obvious WebRTC case, `render` refuses widget HTML that contains a
-WebRTC API name. The list of names is `DEFAULT_SCREEN`. Use the `screen` option
-to change the list. The screen is not containment. It cannot see text that
-arrives later in data.
+WebRTC API name. The list of names is `DEFAULT_FORBIDDEN_TEXT`. Use the
+`forbiddenText` option to change the list. This check is not containment. It
+cannot see text that arrives later in data.
 
 ## Your page's CSP
 

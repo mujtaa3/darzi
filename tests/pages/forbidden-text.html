@@ -1,9 +1,9 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>screen</title></head>
+<html><head><meta charset="utf-8"><title>forbidden text</title></head>
 <body>
 <div id="slot"></div>
 <script type="module">
-  import { createRuntime, DEFAULT_SCREEN } from "/dist/index.js";
+  import { createRuntime, DEFAULT_FORBIDDEN_TEXT } from "/dist/index.js";
   window.__log = [];
   const log = (s) => window.__log.push(s);
 
@@ -19,9 +19,9 @@
     catch (e) { log(`THROW ${label} · ${e.message} · frames+${slot.querySelectorAll("iframe").length - before}`); }
   };
 
-  log("DEFAULT " + JSON.stringify(DEFAULT_SCREEN));
+  log("DEFAULT " + JSON.stringify(DEFAULT_FORBIDDEN_TEXT));
 
-  // Default list. The listed sequence appears only as inert prose — the screen
+  // Default list. The listed sequence appears only as inert prose — the check
   // matches characters anywhere, so it must refuse without anything running.
   const standard = createRuntime({ capabilities, onAudit });
   attempt("default-hit", standard, `<p>This widget mentions RTCPeerConnection in plain text.</p>`);
@@ -29,16 +29,16 @@
   attempt("default-clean", standard, `<script>marzi.call("probe.report", { tag: "clean" });<\/script>`);
 
   // A host's own list REPLACES the default — nothing merged behind its back.
-  const custom = createRuntime({ capabilities, onAudit, screen: ["forbidden-word"] });
+  const custom = createRuntime({ capabilities, onAudit, forbiddenText: ["forbidden-word"] });
   attempt("custom-hit", custom, `<p>forbidden-word</p>`);
   attempt("custom-without-default", custom, `<p>RTCPeerConnection</p>`);
 
   // Disabled.
-  const off = createRuntime({ capabilities, onAudit, screen: [] });
+  const off = createRuntime({ capabilities, onAudit, forbiddenText: [] });
   attempt("off", off, `<p>RTCPeerConnection</p>`);
 
   // An empty sequence would match everything: refused at setup.
-  try { createRuntime({ capabilities, screen: [""] }); log("SETUP no-throw"); }
+  try { createRuntime({ capabilities, forbiddenText: [""] }); log("SETUP no-throw"); }
   catch (e) { log("SETUP " + e.message); }
 
   log("DONE");

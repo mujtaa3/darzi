@@ -12,7 +12,7 @@ import { RPC } from "./consts/rpc.js";
 import {
   ABANDONED,
   DEFAULT_CALL_TIMEOUT_MS,
-  DEFAULT_SCREEN,
+  DEFAULT_FORBIDDEN_TEXT,
   DEFAULT_RATE_LIMIT,
   DEFAULT_START_TIMEOUT_MS,
   DEFAULT_STATE_LIMIT_BYTES,
@@ -129,11 +129,11 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     registry.set(capability.name, capability);
   }
 
-  const screen = [...(options.screen ?? DEFAULT_SCREEN)];
-  for (const entry of screen) {
+  const forbiddenText = [...(options.forbiddenText ?? DEFAULT_FORBIDDEN_TEXT)];
+  for (const entry of forbiddenText) {
     // An empty entry would match every widget HTML, so render would refuse all of them.
     if (typeof entry !== "string" || entry.length === 0) {
-      throw new Error("screen entries must be non-empty strings");
+      throw new Error("forbiddenText entries must be non-empty strings");
     }
   }
 
@@ -444,7 +444,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
    *
    * In order, it:
    *   1. picks the id, and refuses an id that is already live;
-   *   2. refuses screened text and unknown library names, before it changes
+   *   2. refuses forbidden text and unknown library names, before it changes
    *      the page;
    *   3. makes the outer frame (the warden) and the two documents;
    *   4. opens the channel, and waits for the widget's "ready" message;
@@ -464,15 +464,15 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       throw new Error(`widget "${id}" is already rendered — destroy it before rendering it again`);
     }
 
-    // The screen: refuse the widget if its HTML contains a listed sequence
+    // Forbidden text: refuse the widget if its HTML contains a listed sequence
     // anywhere. The runtime only refuses; it never changes the widget HTML. It
     // does this before it changes the page, so a refused widget leaves nothing.
-    const hit = screen.find((entry) => body.includes(entry));
+    const hit = forbiddenText.find((entry) => body.includes(entry));
     if (hit !== undefined) {
-      audit({ widgetId: id, method: "(screen)", decision: "refused", reason: `body contains "${hit}"` });
+      audit({ widgetId: id, method: "(forbidden text)", decision: "refused", reason: `widget HTML contains "${hit}"` });
       throw new Error(
-        `widget refused by screen: body contains "${hit}" ` +
-          "(a screen for obvious misuse, not a containment control)",
+        `widget refused: its HTML contains forbidden text "${hit}" ` +
+          "(a check for obvious misuse, not a containment control)",
       );
     }
 

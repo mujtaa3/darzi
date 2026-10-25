@@ -1,5 +1,5 @@
 /**
- * The runtime's constants: the version, the default screen, the
+ * The runtime's constants: the version, the default forbidden text, the
  * default limits of `RuntimeOptions`, and the limits on fault text.
  */
 
@@ -7,17 +7,17 @@
 export const VERSION = "0.1.0";
 
 /**
- * The default screen: character sequences that make `render` refuse a widget
+ * The default forbidden text: character sequences that make `render` refuse a widget
  * whose body contains any of them, anywhere — code, comments and prose alike.
  * Currently the WebRTC API names, because WebRTC is a network path no CSP
  * setting closes in any engine we test (tests/attacks/webrtc.spec.ts).
  *
- * ⚠️ A screen for obvious misuse, NOT a containment control. It sees only the
+ * ⚠️ A check for obvious misuse, NOT a containment control. It sees only the
  * body at render time: text that reaches the widget later through capability
  * data never passes through it, and JavaScript can reach names it assembles
  * while running. The WebRTC residual in the README stands regardless.
  */
-export const DEFAULT_SCREEN: readonly string[] = Object.freeze([
+export const DEFAULT_FORBIDDEN_TEXT: readonly string[] = Object.freeze([
   "RTCPeerConnection",
   "RTCDataChannel",
   "RTCSessionDescription",

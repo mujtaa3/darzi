@@ -12,7 +12,7 @@
  * public.
  */
 
-export { DEFAULT_SCREEN, VERSION } from "./consts/runtime.js";
+export { DEFAULT_FORBIDDEN_TEXT, VERSION } from "./consts/runtime.js";
 export { createRuntime } from "./runtime.js";
 export { memoryStore } from "./store.js";
 
