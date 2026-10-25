@@ -269,6 +269,9 @@ it.
 | `prompts/` | the templates that write, refine, and repair widgets |
 | `tests/` | the attack suite: test files, attack pages, and the witness |
 
+For the full design, open `ARCHITECTURE.html` in a browser. It has diagrams,
+and a matrix of each rule and the test that proves it.
+
 marzi has no runtime dependencies.
 
 ## License
