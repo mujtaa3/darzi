@@ -264,7 +264,7 @@ it.
 | `src/consts/` | the constants: `jail.ts`, `rpc.ts` and `runtime.ts` |
 | `src/helpers/` | the helper functions: `jail.ts`, and `rpc.ts` (the JSON-RPC replies, the message checks, the rate limit and the params cleaner) |
 | `src/jail.ts` | the sandbox tokens, the CSP, the warden, and how marzi builds the frame document |
-| `src/frame-stub.ts` | the in-frame helper (the `marzi` object): **untrusted**, for ease of use only, not for security |
+| `src/frame-stub.js` | the in-frame helper (the `marzi` object): **untrusted**, for ease of use only, not for security. `npm run build` copies it into `src/frame-stub.ts` as a string. |
 | `src/store.ts` | the storage interface and an in-memory store |
 | `prompts/` | the templates that write, refine, and repair widgets |
 | `tests/` | the attack suite: test files, attack pages, and the witness |

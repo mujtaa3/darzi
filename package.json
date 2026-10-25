@@ -31,8 +31,8 @@
     "prompts"
   ],
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc --watch",
+    "build": "node scripts/stub.mjs && tsc",
+    "watch": "node scripts/stub.mjs && tsc --watch",
     "clean": "rm -rf dist",
     "test": "playwright test -c tests/playwright.config.ts"
   },
