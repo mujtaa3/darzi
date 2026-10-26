@@ -191,7 +191,12 @@ your page as a fault, through the `onWidgetFault` option. A fault has one of
 two kinds:
 
 - `never-started`: the widget did not connect to the channel. The usual cause
-  is a CSP that blocks inline scripts (see "Your page's CSP").
+  is a CSP that blocks inline scripts (see "Your page's CSP"). A second cause
+  is a container that is not on the page. A frame loads only when it is on the
+  page, but the runtime starts to wait for the handshake when you call
+  `render`. Attach the container to the page before you call `render`. If you
+  attach it more than `startTimeoutMs` (10 s by default) after `render`, the
+  widget never connects.
 - `script-error`: the widget's code threw an error. A promise in the widget
   that failed with no handler also gives this kind.
 

@@ -75,8 +75,13 @@ export interface Widget {
 export interface LiveWidget {
   id: string;
   frame: HTMLIFrameElement;
-  /** The host's end of the widget's channel. It is also the widget's identity. */
-  port: MessagePort;
+  /**
+   * The host's end of the widget's current channel, or null when no channel is
+   * open: before the first handshake, and after `destroy()`. Each load of the
+   * frame, after a move or a reload, gets a new channel. The port that a
+   * message arrives on is the widget's identity.
+   */
+  port: MessagePort | null;
   /** Aborted when the widget is destroyed, so that calls in progress stop too. */
   lifetime: AbortController;
   /** The counter for the rate limit (see RuntimeOptions.rateLimit). */

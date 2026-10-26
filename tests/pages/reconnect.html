@@ -1,0 +1,81 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>reconnect</title></head>
+<body>
+<div id="slotA"></div><div id="slotB"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+  const mode = new URLSearchParams(location.search).get("mode") ?? "move";
+  let loaded = 0, calls = 0, slow = 0;
+  const resolvers = [];
+  let widget = null;
+
+  // Window messages from the widget. They do not use the channel, so they
+  // prove what the widget did even when the channel is dead.
+  window.addEventListener("message", (e) => {
+    const d = e.data;
+    if (!d || typeof d !== "object") return;
+    if (d.probe === "loaded") log("LOADED " + (++loaded));
+    if (d.probe === "ports") log("PORTS " + d.n);
+    if (d.probe === "result") log("RESULT " + d.r);
+    // The widget asks for a sync after its flood. The host has handled every
+    // earlier message from that window by now, so it answers.
+    if (d.probe === "sync") { log("SYNC"); widget.frame.contentWindow.frames[0].postMessage({ go: 1 }, "*"); }
+  });
+
+  const rt = createRuntime({
+    capabilities: [
+      // Each call that reaches the switchboard proves that the channel works.
+      { name: "probe.report", description: "x", handler: (p) => { log("CALL " + (++calls) + " " + JSON.stringify(p)); return true; } },
+      // A call that waits until the spec resolves it, by its number.
+      { name: "probe.slow", description: "x", handler: () => { const n = ++slow; log("SLOW " + n); return new Promise((r) => { resolvers[n] = r; }); } },
+    ],
+    onAudit: (e) => log(`AUDIT ${e.widgetId} ${e.method} ${e.decision}`),
+    onWidgetFault: (f) => log("FAULT " + f.kind + " " + f.widgetId),
+  });
+
+  const BODIES = {
+    // On each load: a window message, then one call.
+    move: `<script>
+      parent.parent.postMessage({ probe: "loaded" }, "*");
+      marzi.call("probe.report", {});
+    <\/script>`,
+    // After its first call, the widget sends "ready" 1000 times, then asks for
+    // a sync. It counts each port that arrives, and reports the total.
+    flood: `<script>
+      var ports = 0;
+      window.addEventListener("message", function (e) {
+        if (e.ports && e.ports.length) ports++;
+        if (e.data && e.data.go) parent.parent.postMessage({ probe: "ports", n: ports }, "*");
+      });
+      marzi.call("probe.report", { at: "first" }).then(function () {
+        for (var i = 0; i < 1000; i++) parent.parent.postMessage({ marzi: "ready" }, "*");
+        parent.parent.postMessage({ probe: "sync" }, "*");
+      });
+    <\/script>`,
+    // The widget reloads itself once, in place. window.name survives the
+    // reload, so the second load knows not to reload again.
+    reload: `<script>
+      parent.parent.postMessage({ probe: "loaded" }, "*");
+      marzi.call("probe.report", { name: window.name }).then(function () {
+        if (window.name !== "r") { window.name = "r"; location.reload(); }
+      });
+    <\/script>`,
+    // On each load: one slow call (id 1 in each load), and its result.
+    stale: `<script>
+      parent.parent.postMessage({ probe: "loaded" }, "*");
+      marzi.call("probe.slow", {}).then(
+        function (r) { parent.parent.postMessage({ probe: "result", r: r }, "*"); },
+        function (e) { parent.parent.postMessage({ probe: "result", r: "ERR " + e.message }, "*"); });
+    <\/script>`,
+  };
+
+  widget = rt.render(BODIES[mode], document.getElementById("slotA"), { id: "mover" });
+
+  // The host moves the frame to another container, as a dashboard reorder or a
+  // drag-and-drop would. This reloads the frame.
+  window.__move = () => { document.getElementById("slotB").appendChild(widget.frame); log("MOVED"); };
+  window.__resolve = (n, v) => { resolvers[n](v); log("RESOLVED " + n); };
+</script>
+</body></html>

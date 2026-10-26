@@ -112,7 +112,7 @@
 
   // Listen BEFORE we say "ready", so that we cannot miss the reply.
   window.addEventListener("message", function (event) {
-    if (port) { return; }                     // accept one port only, ever
+    if (port) { return; }                     // accept one port for each load
     if (event.source !== host) { return; }    // and only from the host
     if (!event.data || event.data.marzi !== "port") { return; }
 

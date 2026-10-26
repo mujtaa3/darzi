@@ -447,7 +447,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
    *   2. refuses forbidden text and unknown library names, before it changes
    *      the page;
    *   3. makes the outer frame (the warden) and the two documents;
-   *   4. opens the channel, and waits for the widget's "ready" message;
+   *   4. listens for the widget's "ready" message, and opens a channel for each
+   *      load of the frame;
    *   5. adds the frame to the page, which starts the widget.
    *
    * The returned `destroy()` undoes all of this.
@@ -511,73 +512,110 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     const composed = scaffold(body, libSources);
     frame.srcdoc = warden(composed.html);
 
-    // Step 4. The channel. port1 stays here. port2 goes to the widget, and
-    // becomes its only way to reach the runtime.
-    const channel = new MessageChannel();
-
-    // Made HERE, in the closure that owns the port. The runtime finds who sent
-    // a message from the port it came on, never from the message. That is why
-    // a widget cannot claim to be another widget.
+    // Step 4. The widget's identity. The runtime finds who sent a message from
+    // the port that it came on, never from the message. So a widget cannot
+    // claim to be another widget. `port` is null until the handshake connects it.
     const widget: LiveWidget = {
       id,
       frame,
-      port: channel.port1,
+      port: null,
       lifetime: new AbortController(),
       rate: { start: 0, count: 0 },
       bodyLines: composed.bodyLines,
     };
 
-    // Each message from the widget goes to the switchboard, and the reply, if
-    // any, goes back on the same port. `void` marks that nothing waits for
-    // this promise; the `.catch` keeps an error from becoming unhandled.
-    channel.port1.onmessage = (event: MessageEvent): void => {
-      void handleMessage(widget, event.data)
-        .then((response) => {
-          if (response !== null) channel.port1.postMessage(response);
-        })
-        .catch((error: unknown) => {
-          console.error(`[marzi] reply to widget ${widget.id} failed:`, error);
-        });
-    };
+    // The budget for window messages from the widget's own window: the same
+    // limit as calls, but counted apart from them. Each load sends one
+    // "ready", so an honest widget uses one for each load.
+    const knocks = { start: 0, count: 0 };
 
-    // The handshake. Listen on the host window for the widget's "ready"
-    // message, check that it really came from the widget's frame, and answer
-    // exactly once.
-    let portIssued = false;
+    // The handshake. Listen on the host window for a widget's "ready" message,
+    // and check that it really came from the widget's frame. The listener stays
+    // for the widget's life, so the widget connects again after each move or
+    // reload.
     const onKnock = (event: MessageEvent): void => {
-      if (portIssued) return;
-
       // The check uses the WINDOW, never the origin. An opaque frame's origin
       // is the string "null", which is no use. The browser sets `event.source`,
       // and no page can fake it. The widget's window is the warden's first
       // child. The host can reach it across origins, because any origin may
       // read `frames[i]`. Any other frame that sends "ready", including the
-      // warden, fails this check.
+      // warden or a sibling widget, fails this check.
       const inner = frame.contentWindow?.frames[0];
       if (inner === undefined || event.source !== inner) return;
+
+      // Count each window message from this window against the budget, before
+      // the data check. So a flood of window messages cannot make the runtime
+      // decode message after message, or open channel after channel.
+      if (!withinRate(knocks, Date.now(), rateLimit.calls, rateLimit.windowMs)) return;
 
       const data = event.data as { marzi?: unknown } | null;
       if (!data || data.marzi !== "ready") return;
 
-      // Answer once, and stop listening. Never send a second port: it would be
-      // a second line into the same jail that nothing tracks. The port goes
-      // straight to the widget's window; the warden never touches it.
+      // The stub sends "ready" once for each load of the frame. So each "ready"
+      // means a new document that needs a port. That is true after a move,
+      // which makes a new inner window, and after an in-place reload, which
+      // keeps the window. A widget that sends "ready" with no reload only loses
+      // its own port. `connect` closes that port, and the stub ignores the new
+      // one.
       //
-      // `startTimer` is declared below this function. That is safe: a
-      // "ready" message can arrive only after `render` returns, and by then
-      // `startTimer` exists.
-      portIssued = true;
+      // `connect` and `startTimer` are declared below this function. That is
+      // safe: a "ready" message can arrive only after `render` returns, and by
+      // then both exist.
       clearTimeout(startTimer);
-      window.removeEventListener("message", onKnock);
-      inner.postMessage({ marzi: "port" }, "*", [channel.port2]);
+      connect(inner);
     };
     window.addEventListener("message", onKnock);
 
-    // A frame that never sends "ready" would leave this listener on the page
-    // forever, and give the host an empty box with no explanation. So stop
-    // after a while, and report it.
+    // Open a new channel to one inner window, and send its messages to the
+    // switchboard. port1 stays here. port2 goes to the widget, and becomes its
+    // only way to reach the runtime. `connect` first closes the previous port,
+    // if there is one.
+    const connect = (inner: Window): void => {
+      closePort();
+      const channel = new MessageChannel();
+      widget.port = channel.port1;
+      // Each message from the widget goes to the switchboard, and the reply, if
+      // any, goes back on the same port. `void` marks that nothing waits for
+      // this promise; the `.catch` keeps an error from becoming unhandled.
+      //
+      // The reply must use this channel's port1, not `widget.port`. After a
+      // move or a reload, `widget.port` is a new channel. A late reply for the
+      // old document then goes to the closed old port, so the new document
+      // never gets it, even with the same id.
+      channel.port1.onmessage = (event: MessageEvent): void => {
+        void handleMessage(widget, event.data)
+          .then((response) => {
+            if (response !== null) channel.port1.postMessage(response);
+          })
+          .catch((error: unknown) => {
+            console.error(`[marzi] reply to widget ${widget.id} failed:`, error);
+          });
+      };
+      inner.postMessage({ marzi: "port" }, "*", [channel.port2]);
+    };
+
+    // Close the current port. First clear `onmessage`, so the runtime does not
+    // handle a message that the widget queued before (for example, a late
+    // fault). Then `close` disconnects the port. The widget has no port until
+    // the next `connect`.
+    const closePort = (): void => {
+      if (!widget.port) return;
+      widget.port.onmessage = null;
+      widget.port.close();
+      widget.port = null;
+    };
+
+    // A frame that never sends its first "ready" would give the host an empty
+    // box with no explanation. So after a while, stop listening, and report
+    // it. The timer covers only the first load: a moved frame that never sends
+    // "ready" gets no fault.
+    //
+    // The timer starts when `render` runs, but a frame loads only when it is in
+    // the page. So if the host attaches the container after `startTimeoutMs`,
+    // the widget never connects. The README tells the host to attach it first.
     const startTimer = setTimeout(() => {
-      if (portIssued) return;
+      // A port means that the widget connected.
+      if (widget.port !== null) return;
       window.removeEventListener("message", onKnock);
       reportFault({ widgetId: id, kind: "never-started", message: "widget did not complete its handshake" });
     }, options.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS);
@@ -603,12 +641,11 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         // Abort first. Each call in progress gets its signal, so handlers that
         // listen can stop their work, and the runtime stops waiting for them.
         widget.lifetime.abort(new DOMException("widget destroyed", "AbortError"));
-        // Then release the rest, in the reverse order of render: the start
-        // timer, the "ready" listener, the channel, and the frame.
+        // Then release the rest: the start timer, the "ready" listener, the
+        // port, and the frame.
         clearTimeout(startTimer);
         window.removeEventListener("message", onKnock);
-        channel.port1.onmessage = null;
-        channel.port1.close();
+        closePort();
         frame.remove();
       },
     };

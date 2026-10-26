@@ -50,7 +50,11 @@ export interface RuntimeOptions {
   onAudit?: (event: AuditEvent) => void;
   /** Called when a widget does not start, or when its code throws. Must not throw. */
   onWidgetFault?: (fault: WidgetFault) => void;
-  /** How long to wait for a widget's handshake before the runtime reports `never-started`. Default 10 s. */
+  /**
+   * How long to wait for a widget's handshake before the runtime reports
+   * `never-started`. Default 10 s. The wait starts when `render` runs, so
+   * attach the container to the page first.
+   */
   startTimeoutMs?: number;
   /**
    * The most messages that one widget can send: `calls` in each window of
