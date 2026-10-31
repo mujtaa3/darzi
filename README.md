@@ -13,6 +13,11 @@ API. The user keeps the widget.
 > tested in three browsers. Per-widget grants are planned for the next release.
 > The API may change before 1.0.
 
+> **Known risk:** a widget may send data out through WebRTC in Firefox and
+> Safari. In Chrome too, unless you add the header in
+> [Known residual risks](#known-residual-risks). This can include any data that
+> the widget reads through your capabilities.
+
 ## The problem
 
 A model writes a widget from a prompt. Anyone who can put text into that prompt
@@ -28,8 +33,10 @@ as part of no site. Two browser controls apply to this frame:
 
 - The `sandbox` attribute has only the `allow-scripts` token. Thus the widget
   cannot access your page or your cookies.
-- A Content-Security-Policy (CSP) of `default-src 'none'` blocks the network.
-  The widget cannot use `fetch`, load an `<img>` beacon, or load a font.
+- A Content-Security-Policy (CSP) of `default-src 'none'` blocks network
+  requests. The widget cannot use `fetch`, load an `<img>` beacon, or load a
+  font. This CSP does not block WebRTC (see
+  [Known residual risks](#known-residual-risks)).
 
 **The channel.** The widget has one channel to your page: a private
 `MessageChannel`. The messages on it use JSON-RPC 2.0. Each data request, each
@@ -53,7 +60,7 @@ controls: the warden. The warden contains no scripts. Its CSP
  ┌───────────────────────────┐   one port   ┌─────────────────────────────┐
  │ registry: name → handler  │◄────────────►│ warden (frame-src 'none')   │
  │ switchboard: validate,    │   JSON-RPC   │  └ widget: opaque origin,   │
- │   look up, dispatch, log  │              │    no network, model-written│
+ │   look up, dispatch, log  │              │    no fetch, model-written  │
  └─────────────┬─────────────┘              │    HTML + JS                │
                ▼ handler runs here,         └─────────────────────────────┘
        your existing API, your session
@@ -152,12 +159,14 @@ marzi does not promise these things:
 - That the channel is the only channel out of the widget.
 - That any permission system makes hostile code safe.
 
-**Known residual risks:**
+### Known residual risks
 
 - *WebRTC*, in every browser tested. A widget can connect to a STUN server that
-  it chooses. marzi sets the `webrtc 'block'` directive, but Chrome, WebKit, and
-  Firefox all ignore it. If a browser starts to obey it, the attack suite will
-  show the change.
+  it chooses, and it may send data that way. marzi sets the
+  [`webrtc 'block'`](https://www.w3.org/TR/CSP3/#directive-webrtc) directive,
+  but Chrome, WebKit, and Firefox all ignore it. marzi cannot close this path.
+  Your server can close it in Chrome (see below). If a browser starts to obey
+  the directive, the attack suite will show the change.
 - DNS prefetch and preconnect hints.
 - No CPU or memory isolation.
 - Nothing checks that a widget's *numbers* are correct.
@@ -166,6 +175,28 @@ To catch the obvious WebRTC case, `render` refuses widget HTML that contains a
 WebRTC API name. The list of names is `DEFAULT_FORBIDDEN_TEXT`. Use the
 `forbiddenText` option to change the list. This check is not containment. It
 cannot see text that arrives later in data.
+
+**To close WebRTC in Chrome,** send this response header with each page that
+shows widgets:
+
+```
+Connection-Allowlist: (response-origin "https://api.example.com")
+```
+
+List your page's own origin (`response-origin`) and each other origin that your
+page connects to. Chrome then blocks WebRTC and all connections to other
+origins, from your page and from its frames. Firefox and WebKit ignore this
+header. Tests in Chrome 156 on desktop show this behavior. Know these effects
+before you use it:
+
+- The list also applies to your page's own code. A request to an origin that is
+  not in the list fails.
+- A widget that tries WebRTC goes blank, and other widgets on the page can go
+  blank with it. No fault reports this. Your page continues to work, and you can
+  render new widgets.
+- If other code on your page uses WebRTC in a frame with no `sandbox`, Chrome can
+  close the whole page (tested by hand).
+- Do not add `webrtc=allow`. It also allows WebRTC for widgets.
 
 ## Your page's CSP
 

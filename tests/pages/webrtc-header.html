@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>webrtc-header</title></head>
+<body>
+<div id="slot"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+
+  // The evidence goes to the witness, outside the browser. When Chrome closes a
+  // widget's process, Playwright treats the whole page as crashed and can no
+  // longer read it, although the host page is still running.
+  const WITNESS = "http://127.0.0.1:9999/witness";
+  const tell = (label) => fetch(`${WITNESS}?via=${label}`).catch(() => {});
+
+  const runtime = createRuntime({
+    // Forbidden text OFF on purpose, as in webrtc.html: this page tests what
+    // the engine does with a widget that reaches WebRTC.
+    forbiddenText: [],
+    capabilities: [{ name: "probe.tell", description: "checkpoint", handler: (p) => { tell(p.label); return true; } }],
+  });
+  const slot = document.getElementById("slot");
+
+  // A widget that reports while its process lives, and the host page likewise.
+  const reporting = (who) => `<script>
+    var n = 0;
+    setInterval(function () { n += 1; marzi.call("probe.tell", { label: "${who}-" + n }); }, 150);
+  <\/script>`;
+  let beats = 0;
+  setInterval(() => { beats += 1; tell(`host-${beats}`); }, 150);
+  runtime.render(reporting("sibling"), slot, { id: "sibling" });
+
+  window.__attack = () => {
+    runtime.render(`<script>
+      marzi.call("probe.tell", { label: "hostile-start" }).then(function () {
+        var pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:127.0.0.1:3478" }] });
+        pc.createDataChannel("x");
+        pc.createOffer().then(function (o) { return pc.setLocalDescription(o); });
+      });
+    <\/script>`, slot, { id: "hostile" });
+    // A new widget after the attempt. A timer, because the test cannot reach
+    // the page after Playwright treats it as crashed.
+    setTimeout(() => runtime.render(reporting("late"), slot, { id: "late" }), 1500);
+  };
+</script>
+</body></html>

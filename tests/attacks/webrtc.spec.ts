@@ -9,6 +9,9 @@
  * asserts nothing about the widget (first run); "blocked" requires zero
  * datagrams; "leaks" documents a residual — and fails if the engine ever
  * starts blocking, because that is news the threat model must hear.
+ *
+ * The one control that a host can set is a response header, in Chrome only:
+ * webrtc-header.spec.ts.
  */
 import { test, expect } from "../harness/witness";
 import { openAttack } from "../harness/attack";

@@ -1,7 +1,7 @@
 {
   "name": "marzi",
   "version": "0.1.0",
-  "description": "Run LLM-generated widgets safely inside your web app.",
+  "description": "Run LLM-generated widgets in a sandbox inside your web app.",
   "keywords": [
     "llm",
     "ai",
