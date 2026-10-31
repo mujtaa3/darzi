@@ -18,7 +18,11 @@ export interface AuditEvent {
    * different widget.
    */
   widgetId: string;
-  /** The method that the widget called, or a marker such as "(rate limit)". */
+  /**
+   * The method that the widget called, or a marker such as "(rate limit)".
+   * For "no such capability" it is the widget's own text, cut to 300
+   * characters. Show it as text, never as HTML.
+   */
   method: string;
   /**
    * `dispatched`: the switchboard sent the call to its handler or to the store.

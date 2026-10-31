@@ -60,6 +60,10 @@
         ["control-packed", "probe.echo", function () { return { v: new Array(10001).fill(0) }; }],
         ["sparse", "probe.echo", function () { return { v: new Array(100000000) }; }]
       ],
+      method: [
+        ["control-short", "nope", function () { return {}; }],
+        ["long-method", "z".repeat(2000000), function () { return {}; }]
+      ],
       view: [
         ["control-buffer", "probe.echo", function () { return { v: new ArrayBuffer(50000000) }; }],
         ["view", "probe.echo", function () { return { v: new Uint8Array(new ArrayBuffer(50000000), 0, 1) }; }]

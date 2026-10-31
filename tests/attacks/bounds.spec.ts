@@ -1,14 +1,15 @@
 /**
  * Bounds — values that are small on the wire but large in the host (from the
- * 2026-10-25 review: C02, C09, C10).
+ * 2026-10-25 review: C02, C08, C09, C10).
  *
- * The params budget counts strings, keys and binary data. Three values get past
+ * The params budget counts strings, keys and binary data. Four values get past
  * it or around it: an array with a huge length and no items, which the
- * sanitizer walks slot by slot; a small typed-array view, whose whole buffer
- * the clone copies; and a RegExp, whose source the budget does not count. Each
- * test asserts the bound that the switchboard should hold, and each has a
- * control: a related value that the switchboard refuses. A control that does
- * not fire fails the test, so a pass is never empty.
+ * sanitizer walks slot by slot; a method name, which no check bounds; a small
+ * typed-array view, whose whole buffer the clone copies; and a RegExp, whose
+ * source the budget does not count. Each test asserts the bound that the
+ * switchboard should hold, and each has a control: a related value that the
+ * switchboard refuses. A control that does not fire fails the test, so a pass
+ * is never empty.
  *
  * The page logs the largest gap of a heartbeat on the host page for each step.
  * The gap shows how long one message blocked the main thread. It is evidence,
@@ -17,6 +18,9 @@
 import { test, expect } from "../harness/witness";
 import { openAttack } from "../harness/attack";
 
+// MAX_METHOD_LENGTH in src/consts/runtime.ts: the most of a widget's method
+// name that an audit event or an error reply carries.
+const METHOD_BOUND = 300;
 // MAX_PARAM_TEXT in src/consts/rpc.ts: the params budget, in characters and bytes.
 const PARAM_TEXT = 1_000_000;
 
@@ -41,6 +45,18 @@ test("an array with a huge length is refused before the host walks it", async ({
   expect(r.refusals("too many values"), "refusals for 'too many values'").toBeGreaterThanOrEqual(1);
   // No array of length 1e8 reaches a handler.
   expect(r.handlers.filter((h) => h.kind === "array").map((h) => h.length), "array lengths that reached the handler").toEqual([]);
+});
+
+test("a widget's method name reaches onAudit and the reply with a bound", async ({ page }) => {
+  const r = await run(page, "method");
+  // Control: an unknown short method is refused and audited.
+  expect(r.log.some((l) => l.startsWith("AUDIT refused len=4 method=nope reason=no such capability")), "control audit").toBe(true);
+  // No audit event carries a method longer than the bound.
+  const lengths = r.log.filter((l) => l.startsWith("AUDIT ")).map((l) => Number(/len=(\d+)/.exec(l)![1]));
+  expect(lengths.filter((n) => n > METHOD_BOUND), "audited method lengths over the bound").toEqual([]);
+  // The reply to the widget is bounded too: the refusal text plus the cut method.
+  const reply = r.log.find((l) => l.startsWith("MARK long-method:end"))!;
+  expect(Number(/reply length (\d+)/.exec(reply)![1]), "reply length").toBeLessThanOrEqual(METHOD_BOUND + 40);
 });
 
 test("a small view over a large buffer does not carry the buffer past the budget", async ({ page }) => {

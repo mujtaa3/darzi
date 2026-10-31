@@ -17,6 +17,7 @@ import {
   DEFAULT_STATE_LIMIT_BYTES,
   MAX_FAULT_MESSAGE,
   MAX_FAULT_NAME,
+  MAX_METHOD_LENGTH,
   UTF8,
   VERSION,
 } from "./consts/runtime.js";
@@ -358,13 +359,17 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     // permission that a call needs.
     const capability = registry.get(request.method);
     if (capability === undefined) {
+      // This is the one place where the method reaches the host as the widget
+      // wrote it, at any length. Cut it and make it one line, as fault text,
+      // so the audit log and the reply stay small and safe to show.
+      const method = oneLine(clampText(request.method, MAX_METHOD_LENGTH));
       audit({
         widgetId: widget.id,
-        method: request.method,
+        method,
         decision: "refused",
         reason: "no such capability",
       });
-      return fail(request.id, RPC.METHOD_NOT_FOUND, `no such capability: ${request.method}`);
+      return fail(request.id, RPC.METHOD_NOT_FOUND, `no such capability: ${method}`);
     }
 
     // 6. The params come in from the widget here. sanitizeParams builds a new

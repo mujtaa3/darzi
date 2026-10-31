@@ -1,6 +1,6 @@
 /**
  * The runtime's constants: the version, the default forbidden text, the
- * default limits of `RuntimeOptions`, the limits on fault text, and the UTF-8
+ * default limits of `RuntimeOptions`, the limits on widget text, and the UTF-8
  * encoder that measures saved state.
  */
 
@@ -47,6 +47,12 @@ export const MAX_POSITION = 1_000_000;
 export const MAX_FAULT_MESSAGE = 300;
 /** Longest error class name we will carry ("TypeError" is 9). */
 export const MAX_FAULT_NAME = 40;
+/**
+ * Longest method name that an audit event or an error reply carries. Only an
+ * unknown method reaches them as the widget wrote it, so it is cut like fault
+ * text. A registered name is the host's own text and needs no cut.
+ */
+export const MAX_METHOD_LENGTH = 300;
 
 /** Measures saved state in UTF-8 bytes, the unit that stores count. */
 export const UTF8 = new TextEncoder();
