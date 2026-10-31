@@ -8,7 +8,7 @@
   const log = (s) => window.__log.push(s);
 
   const runtime = createRuntime({
-    capabilities: [{ name: "probe.report", description: "checkpoint", handler: (p) => { log("REPORT " + JSON.stringify(p)); return true; } }],
+    capabilities: [{ name: "probe.report", description: "checkpoint", handler: (p) => { log("REPORT " + JSON.stringify(p)); if (p.at === "forged") sibling.contentWindow.postMessage({ knockNow: 1 }, "*"); return true; } }],
     onAudit: (e) => log(`AUDIT ${e.widgetId} ${e.method} ${e.decision}`),
   });
 
@@ -18,7 +18,10 @@
   // derive identity from the port alone.
   const widget = runtime.render(`<script>
     var raw = null;
-    window.addEventListener("message", function (e) { if (e.ports && e.ports[0]) raw = e.ports[0]; });
+    window.addEventListener("message", function (e) {
+      if (e.ports && e.ports[0]) raw = e.ports[0];
+      if (e.data && e.data.go) marzi.call("probe.report", { at: "after-knocks" });
+    });
     marzi.call("probe.report", { at: "honest" }).then(function () {
       raw.postMessage({ jsonrpc: "2.0", id: 999, method: "probe.report",
         params: { at: "forged" }, widgetId: "someone-else", origin: "https://trusted.example" });
@@ -28,12 +31,23 @@
 
   // A sibling frame that is NOT a widget: sandboxed, same shape, shouting the
   // knock at the host and waiting for a port. It must never get one.
-  window.addEventListener("message", (e) => { if (e.data && e.data.sibling) log("SIBLING " + e.data.sibling); });
+  window.addEventListener("message", (e) => {
+    if (!e.data || !e.data.sibling) return;
+    log("SIBLING " + e.data.sibling);
+    // The host has handled the sibling's later knocks by now. The widget's
+    // channel must still work.
+    if (e.data.sibling === "knocked-late") widget.frame.contentWindow.frames[0].postMessage({ go: 1 }, "*");
+  });
   const sibling = document.createElement("iframe");
   sibling.setAttribute("sandbox", "allow-scripts");
   sibling.srcdoc = `<script>
     window.addEventListener("message", function (e) {
       if (e.ports && e.ports[0]) parent.postMessage({ sibling: "got-a-port" }, "*");
+      if (e.data && e.data.knockNow) {
+        parent.postMessage({ marzi: "ready" }, "*");
+        parent.postMessage({ marzi: "ready" }, "*");
+        parent.postMessage({ sibling: "knocked-late" }, "*");
+      }
     });
     parent.postMessage({ marzi: "ready" }, "*");
     setTimeout(function () { parent.postMessage({ marzi: "ready" }, "*"); parent.postMessage({ sibling: "knocked-twice" }, "*"); }, 300);

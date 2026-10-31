@@ -293,6 +293,10 @@ because you cannot trust a page to report on itself. Retries are off, so a test
 that passes by chance cannot hide a leak. A release gets a tag only when all
 tests pass.
 
+`node tests/mutations/run.mjs` shows that the tests can fail. It breaks each
+control in a copy of the repo, one at a time, and expects its test to go red. It
+takes some minutes, so `npm test` does not run it. Run it before a release.
+
 A probe in `tests/probes/` asks a real model to repair a widget whose error
 text contains an attack. The probe needs an API key, so `npm test` does not run
 it.
@@ -330,7 +334,7 @@ users to run current versions.
 | `src/frame-stub.js` | the in-frame helper (the `marzi` object): **untrusted**, for ease of use only, not for security. `npm run build` copies it into `src/frame-stub.ts` as a string. |
 | `src/store.ts` | `memoryStore`, an in-memory store; the storage contract is in `src/types/store.ts` |
 | `prompts/` | the templates that write, refine, and repair widgets |
-| `tests/` | the attack suite: test files, attack pages, and the witness |
+| `tests/` | the attack suite: test files, attack pages, the witness, and the mutation checks |
 
 marzi has no runtime dependencies.
 

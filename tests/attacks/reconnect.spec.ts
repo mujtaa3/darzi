@@ -7,10 +7,11 @@
  * new channel to it.
  *
  * The same happens after an in-place reload (`location.reload()`), which
- * keeps the inner window. Two guards keep this safe, and each has its own
+ * keeps the inner window. Three guards keep this safe, and each has its own
  * test here:
  *   - a flood of "ready" messages opens at most the budgeted number of
  *     channels (the same limit as calls, counted apart from them);
+ *   - a new channel closes the old one, so a widget has one live channel;
  *   - a reply to a call from before the move never reaches the new document,
  *     even when both loads use the same call id.
  *
@@ -18,7 +19,7 @@
  * channel, so they show what the widget did even when the channel is dead.
  */
 import { test, expect } from "../harness/witness";
-import { openAttack } from "../harness/attack";
+import { openAttack, settle } from "../harness/attack";
 
 type Hooks = { __move: () => void; __resolve: (n: number, v: string) => void };
 
@@ -78,6 +79,17 @@ test("a flood of ready messages opens at most the budgeted number of channels", 
   // all. Without the budget, all 1001 would.
   expect(await attack.logged("PORTS "), "ports that reached the widget").toEqual(["120"]);
   expect((await attack.log()).filter((l) => l.startsWith("FAULT ")), "faults").toEqual([]);
+});
+
+test("a new channel closes the old one", async ({ page }) => {
+  const attack = await openAttack(page, "reconnect?mode=second-ready");
+
+  // Control: the new port works, so the widget did send on both ports.
+  await attack.untilLog('"at":"new-port"');
+  await settle(page);
+
+  expect((await attack.logged("CALL ")).map((l) => l.split(" ")[1]), "calls that reached the host")
+    .toEqual(['{"at":"first"}', '{"at":"new-port"}']);
 });
 
 test("a reply to a call from before the move never reaches the moved widget", async ({ page }) => {

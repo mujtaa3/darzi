@@ -54,6 +54,24 @@
         parent.parent.postMessage({ probe: "sync" }, "*");
       });
     <\/script>`,
+    // The widget keeps its port, and asks for a new one with no reload. Then it
+    // tries both. The old port must be dead, or a widget could collect live
+    // channels, and lend one that outlives its own destroy.
+    "second-ready": `<script>
+      var ports = [];
+      window.addEventListener("message", function (e) {
+        if (!e.ports || !e.ports[0]) return;
+        ports.push(e.ports[0]);
+        if (ports.length === 1) {
+          marzi.call("probe.report", { at: "first" }).then(function () {
+            parent.parent.postMessage({ marzi: "ready" }, "*");
+          });
+        } else {
+          ports[0].postMessage({ jsonrpc: "2.0", id: 71, method: "probe.report", params: { at: "old-port" } });
+          ports[1].postMessage({ jsonrpc: "2.0", id: 72, method: "probe.report", params: { at: "new-port" } });
+        }
+      });
+    <\/script>`,
     // The widget reloads itself once, in place. window.name survives the
     // reload, so the second load knows not to reload again.
     reload: `<script>

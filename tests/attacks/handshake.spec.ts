@@ -3,6 +3,10 @@
  *
  * A sibling frame that shouts the knock must never receive a port; a widget
  * that stamps someone else's id on a message is still itself in the audit.
+ *
+ * Each "ready" that passes the check closes the widget's port and opens a new
+ * one. So a knock from another frame must also not cut a widget off. The sibling
+ * knocks again after the widget has connected, and the widget must still call.
  */
 import { test, expect } from "../harness/witness";
 import { openAttack, settle } from "../harness/attack";
@@ -10,7 +14,8 @@ import { openAttack, settle } from "../harness/attack";
 test("only the widget's own frame gets a port, and it cannot rename itself", async ({ page }) => {
   const attack = await openAttack(page, "handshake");
   await attack.untilLog("SIBLING knocked-twice");
-  await attack.untilCount("REPORT", 2); // honest, then forged
+  await attack.untilLog("SIBLING knocked-late");
+  await attack.untilCount("REPORT", 3); // honest, forged, then after the late knocks
   await settle(page);
 
   const [rendered] = await attack.logged("RENDERED ");
@@ -23,7 +28,7 @@ test("only the widget's own frame gets a port, and it cannot rename itself", asy
     expect(who, `audit for ${method}`).toBe(rendered);
     expect(decision).toBe("dispatched");
   }
-  expect(await attack.reports()).toEqual([{ at: "honest" }, { at: "forged" }]);
+  expect(await attack.reports()).toEqual([{ at: "honest" }, { at: "forged" }, { at: "after-knocks" }]);
 
   // The sibling knocked and got nothing.
   const sibling = await attack.logged("SIBLING ");
