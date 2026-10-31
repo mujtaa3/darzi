@@ -18,6 +18,8 @@ import {
   MAX_FAULT_MESSAGE,
   MAX_FAULT_NAME,
   MAX_METHOD_LENGTH,
+  MAX_TIMER_MS,
+  STUB_NO_ANSWER_MS,
   UTF8,
   VERSION,
 } from "./consts/runtime.js";
@@ -87,6 +89,24 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       throw new Error(`library "${lib.name}" is registered twice`);
     }
     libraries.set(lib.name, lib.source);
+  }
+
+  // The number options. Each must be a whole number in its range. A bad value
+  // would show only later, inside a widget: `AbortSignal.timeout(Infinity)`
+  // throws after the audit says "dispatched"; a timer delay over MAX_TIMER_MS
+  // fires at once; and a `callTimeoutMs` of STUB_NO_ANSWER_MS or more lets the
+  // stub give up before the host does.
+  const checkNumber = (name: string, value: unknown, max: number): void => {
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > max) {
+      throw new Error(`option "${name}" must be a whole number from 1 to ${max}`);
+    }
+  };
+  if (options.callTimeoutMs !== undefined) checkNumber("callTimeoutMs", options.callTimeoutMs, STUB_NO_ANSWER_MS - 1);
+  if (options.startTimeoutMs !== undefined) checkNumber("startTimeoutMs", options.startTimeoutMs, MAX_TIMER_MS);
+  if (options.stateLimitBytes !== undefined) checkNumber("stateLimitBytes", options.stateLimitBytes, Number.MAX_SAFE_INTEGER);
+  if (options.rateLimit !== undefined) {
+    checkNumber("rateLimit.calls", options.rateLimit.calls, Number.MAX_SAFE_INTEGER);
+    checkNumber("rateLimit.windowMs", options.rateLimit.windowMs, MAX_TIMER_MS);
   }
 
   /** The ids of the widgets that are rendered and not yet destroyed. */

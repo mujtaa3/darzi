@@ -31,8 +31,19 @@ export const DEFAULT_RATE_LIMIT = Object.freeze({ calls: 120, windowMs: 10_000 }
 /** Default for `RuntimeOptions.stateLimitBytes`. */
 export const DEFAULT_STATE_LIMIT_BYTES = 64_000;
 
-/** Default for `RuntimeOptions.callTimeoutMs`. Keep it under the stub's 60 s backstop (`NO_ANSWER_MS` in frame-stub.js). */
+/** Default for `RuntimeOptions.callTimeoutMs`. It must stay under `STUB_NO_ANSWER_MS`. */
 export const DEFAULT_CALL_TIMEOUT_MS = 30_000;
+
+/**
+ * The stub's backstop: it rejects a call with no answer after this long. It
+ * must match `NO_ANSWER_MS` in src/frame-stub.js. `createRuntime` refuses a
+ * `callTimeoutMs` of this value or more, because the stub would then give up
+ * before the host does.
+ */
+export const STUB_NO_ANSWER_MS = 60_000;
+
+/** The longest delay that a browser timer accepts, 2^31 - 1 ms. A longer delay fires at once. */
+export const MAX_TIMER_MS = 2_147_483_647;
 
 /** Default for `RuntimeOptions.startTimeoutMs`. */
 export const DEFAULT_START_TIMEOUT_MS = 10_000;

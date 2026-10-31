@@ -13,7 +13,11 @@ import type { Capability } from "./capability.js";
 import type { WidgetFault } from "./fault.js";
 import type { Library, RenderOptions, Widget, WidgetBody } from "./widget.js";
 
-/** The options for `createRuntime`. You give them once, for the whole runtime. */
+/**
+ * The options for `createRuntime`. You give them once, for the whole runtime.
+ * `createRuntime` checks them at once, and throws for a bad one, so that a host
+ * error shows at setup and not later inside a widget.
+ */
 export interface RuntimeOptions {
   /** The operations that widgets can call. In 0.1.0, each widget can call each one. */
   capabilities: Capability[];
@@ -39,7 +43,8 @@ export interface RuntimeOptions {
    * The largest state that one widget can save, in UTF-8 bytes of its JSON.
    * This is its size on the way to the store, and the unit that most backends
    * count. Default 64 000. The widget writes the state, so it is hostile. This
-   * limit stops a widget from filling the host's storage.
+   * limit stops a widget from filling the host's storage. A whole number of
+   * 1 or more.
    */
   stateLimitBytes?: number;
   /**
@@ -53,7 +58,8 @@ export interface RuntimeOptions {
   /**
    * How long to wait for a widget's handshake before the runtime reports
    * `never-started`. Default 10 s. The wait starts when `render` runs, so
-   * attach the container to the page first.
+   * attach the container to the page first. A whole number from 1 to
+   * 2 147 483 647, the longest delay that a browser timer accepts.
    */
   startTimeoutMs?: number;
   /**
@@ -62,12 +68,14 @@ export interface RuntimeOptions {
    * messages, because a widget can flood with any of them. The windows are
    * fixed, so a burst across two windows can briefly reach twice the limit.
    * That is acceptable for flood control, not for billing. Default 120 in 10 s.
+   * Both are whole numbers of 1 or more.
    */
   rateLimit?: { calls: number; windowMs: number };
   /**
    * How long a capability call or a store call can run before the runtime
    * stops waiting. Default 30 s. The handler's `signal` aborts at the same
-   * time. Keep it under 60 s, because the in-frame helper gives up after 60 s.
+   * time. A whole number from 1 to 59 999: the in-frame helper gives up after
+   * 60 s, so `createRuntime` refuses a longer deadline.
    */
   callTimeoutMs?: number;
 }

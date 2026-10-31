@@ -19,8 +19,9 @@
   // A backstop only. The host answers its own timeouts with an error, so this
   // fires only when no answer comes at all: the widget was destroyed during
   // the call, or the channel never opened. It is long on purpose, so that the
-  // host's deadline (callTimeoutMs, 30 s by default) comes first. That is true
-  // only while callTimeoutMs is under 60 s.
+  // host's deadline (callTimeoutMs, 30 s by default) comes first. createRuntime
+  // refuses a callTimeoutMs of 60 s or more. STUB_NO_ANSWER_MS in
+  // src/consts/runtime.ts must match this value.
   var NO_ANSWER_MS = 60000;
 
   // Send one message to the host. Before the port arrives, keep the message in
