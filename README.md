@@ -14,9 +14,9 @@ API. The user keeps the widget.
 > The API may change before 1.0.
 
 > **Known risk:** a widget may send data out through WebRTC in Firefox and
-> Safari. In Chrome too, unless you add the header in
-> [Known residual risks](#known-residual-risks). This can include any data that
-> the widget reads through your capabilities.
+> Safari. In Chrome too, unless it is version 152 or later and you add the header
+> in [Known residual risks](#known-residual-risks). This can include any data
+> that the widget reads through your capabilities.
 
 ## The problem
 
@@ -165,8 +165,8 @@ marzi does not promise these things:
   it chooses, and it may send data that way. marzi sets the
   [`webrtc 'block'`](https://www.w3.org/TR/CSP3/#directive-webrtc) directive,
   but Chrome, WebKit, and Firefox all ignore it. marzi cannot close this path.
-  Your server can close it in Chrome (see below). If a browser starts to obey
-  the directive, the attack suite will show the change.
+  Your server can close it in Chrome 152 or later (see below). If a browser
+  starts to obey the directive, the attack suite will show the change.
 - DNS prefetch and preconnect hints.
 - No CPU or memory isolation.
 - Nothing checks that a widget's *numbers* are correct.
@@ -176,8 +176,8 @@ WebRTC API name. The list of names is `DEFAULT_FORBIDDEN_TEXT`. Use the
 `forbiddenText` option to change the list. This check is not containment. It
 cannot see text that arrives later in data.
 
-**To close WebRTC in Chrome,** send this response header with each page that
-shows widgets:
+**To close WebRTC in Chrome and Edge 152 or later,** send this response header
+with each page that shows widgets:
 
 ```
 Connection-Allowlist: (response-origin "https://api.example.com")
@@ -185,9 +185,9 @@ Connection-Allowlist: (response-origin "https://api.example.com")
 
 List your page's own origin (`response-origin`) and each other origin that your
 page connects to. Chrome then blocks WebRTC and all connections to other
-origins, from your page and from its frames. Firefox and WebKit ignore this
-header. Tests in Chrome 156 on desktop show this behavior. Know these effects
-before you use it:
+origins, from your page and from its frames. Firefox, WebKit, and older versions
+of Chrome ignore this header. Tests in Chrome 156 on desktop show this behavior.
+Know these effects before you use it:
 
 - The list also applies to your page's own code. A request to an origin that is
   not in the list fails.
@@ -283,10 +283,9 @@ npm test                                 # build, then every attack in three bro
 ```
 
 In the attack suite, hostile widgets try to escape the jail, leak data, and do
-more than marzi allows. There are fourteen classes of attack in
-`tests/attacks/`. Each test that expects an attack to fail has a positive
-control. The control runs the same attack without the defense and expects it to
-succeed.
+more than marzi allows. The attacks are in `tests/attacks/`. Each test that
+expects an attack to fail has a positive control. The control runs the same
+attack without the defense and expects it to succeed.
 
 The witness is a server outside the browser that records the traffic it gets
 (HTTP on `127.0.0.1:9999`, UDP on `:3478`). The witness is outside the browser
