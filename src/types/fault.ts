@@ -23,16 +23,19 @@ export interface WidgetFault {
   kind: "never-started" | "script-error";
   /**
    * ⚠️ For `script-error`, the widget wrote this text, and it arrives in the
-   * host page. Escape it. Never put it in `innerHTML`. The runtime limits its
-   * length, but it cannot check its content. Browsers often copy values into
-   * error messages ("reading 'merchant'", or a JSON error that quotes its
-   * input), so the text can contain data that the widget received.
+   * host page. Escape it. Never put it in `innerHTML`. The runtime cuts it to
+   * 300 characters and makes it one line: no line breaks, no characters that
+   * change the direction of text, no lone surrogate halves. It cannot check
+   * the content. Browsers often copy values into error messages ("reading
+   * 'merchant'", or a JSON error that quotes its input), so the text can
+   * contain data that the widget received.
    */
   message: string;
   /**
    * `script-error` only: the error's type as the widget reported it, for
-   * example "TypeError". The widget wrote it; 40 characters or fewer. Absent
-   * when the thrown value had no name.
+   * example "TypeError". Letters, digits, `_`, `$` and `.` only, 40 characters
+   * or fewer. The runtime leaves out any other value, because a repair prompt
+   * quotes the name. Absent when the thrown value had no name.
    */
   name?: string;
   /**

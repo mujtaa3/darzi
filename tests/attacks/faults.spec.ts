@@ -114,6 +114,17 @@ test("faults arrive clamped, positioned in the widget's own lines, and never aft
   // 299 "a" then an emoji (two UTF-16 units): the cut at 300 would split the
   // pair, so the whole emoji goes and no lone half is left behind.
   expect(forged.find((f) => f.message.startsWith("aaaa"))!.message).toBe("a".repeat(299));
+  // Text is made one line, direction marks go, and a lone surrogate half
+  // becomes U+FFFD. A name that is not an error class name is left out.
+  const lines = forged.find((f) => f.message.startsWith("forged-lines"))!;
+  expect(lines.message).toBe("forged-lines line two line three");
+  expect(lines.name, "a name with a line break").toBeUndefined();
+  const bidi = forged.find((f) => f.message.startsWith("forged-bidi"))!;
+  expect(bidi.message).toBe("forged-bidi evil text");
+  expect(bidi.name, "a name with a space").toBeUndefined();
+  const lone = forged.find((f) => f.message.startsWith("forged-lone"))!;
+  expect(lone.message).toBe("forged-lone\uFFFDx");
+  expect(lone.name).toBe("My.Error$1");
   // The id names the sending port, even when the widget claims another live widget's.
   const extra = byMessage("forged-extra")!;
   expect(extra.widgetId).toBe("forged");

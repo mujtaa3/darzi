@@ -84,8 +84,10 @@
   // wrong type, a position inside the host's part of the document, a position
   // past the widget's last line, an oversized name, messages that are not
   // strings (one whose toString cannot be called), a message whose cut would
-  // fall inside a surrogate pair, and fields a widget may not set — including
-  // the id of another widget that is live on the page.
+  // fall inside a surrogate pair, a message with line breaks, one with
+  // direction marks, one with a lone surrogate half, names that are not error
+  // class names, and fields a widget may not set — including the id of another
+  // widget that is live on the page.
   render("forged", lines(
     "<script>",
     "var raw = null;",
@@ -103,6 +105,9 @@
     "  send({ message: 12345 });",
     "  send({ message: { toString: 1 } });",
     '  send({ message: new Array(300).join("a") + "\\uD83D\\uDE00" });',
+    '  send({ message: "forged-lines\\nline two\\u2028line three", name: "TypeError\\n## Host note" });',
+    '  send({ message: "forged-bidi \\u202Eevil\\u202C text", name: "Range Error" });',
+    '  send({ message: "forged-lone\\uD800x", name: "My.Error$1" });',
     '  send({ message: "forged-extra", widgetId: "typeerror", kind: "never-started", extra: 1 });',
     "});",
     "<\/script>"));

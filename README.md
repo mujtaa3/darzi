@@ -204,8 +204,8 @@ A `script-error` fault can also have these fields:
 
 | Field | What |
 |---|---|
-| `message` | The error text, up to 300 characters |
-| `name` | The type of error, for example `TypeError` |
+| `message` | The error text, on one line, up to 300 characters |
+| `name` | The type of error, for example `TypeError`. Letters, digits, `_`, `$` and `.` only, up to 40 characters |
 | `line`, `column` | The position of the error in the widget HTML; line 1 is its first line |
 
 All these fields come from the widget, and a hostile widget can write any text

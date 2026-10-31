@@ -55,6 +55,28 @@ export function clampText(text: string, max: number): string {
   return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
 }
 
+/**
+ * Make widget text safe for one line of host UI, a log, or a prompt. It
+ * replaces each line break with a space, removes the characters that change
+ * the direction of text (they can hide or reorder what a reader sees), and
+ * replaces a surrogate half that has no partner with U+FFFD. The stub cuts
+ * text with `slice`, which can leave such a half. Use it after `clampText`, so
+ * that it works on a short text.
+ */
+export function oneLine(text: string): string {
+  return text
+    .replace(/\r\n|[\r\n\u2028\u2029]/g, " ")
+    .replace(/[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, "")
+    .replace(/[\uD800-\uDFFF]/g, (half: string, at: number, whole: string) => {
+      // A high half pairs with the low half after it; a low half with the high
+      // half before it. charCodeAt gives NaN past either end, so no partner.
+      const code = half.charCodeAt(0);
+      const partner = whole.charCodeAt(code <= 0xdbff ? at + 1 : at - 1);
+      const paired = code <= 0xdbff ? partner >= 0xdc00 && partner <= 0xdfff : partner >= 0xd800 && partner <= 0xdbff;
+      return paired ? half : "\uFFFD";
+    });
+}
+
 /** A line or column that a widget reported: a positive whole number, or nothing. */
 export function position(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value >= 1 && value < MAX_POSITION

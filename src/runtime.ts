@@ -20,7 +20,7 @@ import {
   UTF8,
   VERSION,
 } from "./consts/runtime.js";
-import { abandonReason, clampText, newWidgetId, position, untilAborted } from "./helpers/runtime.js";
+import { abandonReason, clampText, newWidgetId, oneLine, position, untilAborted } from "./helpers/runtime.js";
 import { scaffold, warden } from "./jail.js";
 import {
   fail,
@@ -131,8 +131,11 @@ export function createRuntime(options: RuntimeOptions): Runtime {
    * The stub sends a fault when the widget's code throws. But the widget can
    * also send a fault itself, with any values, so each field is only a claim.
    * The runtime builds a NEW fault from four known fields, and checks each one:
-   *   - `message`: a string, cut to 300 characters; otherwise "unknown error";
-   *   - `name`: a non-empty string, cut to 40 characters; otherwise left out;
+   *   - `message`: a string, cut to 300 characters and made one line (no line
+   *     breaks, no direction-control characters, no lone surrogate halves);
+   *     otherwise "unknown error";
+   *   - `name`: a string of letters, digits, `_`, `$` and `.`, cut to 40
+   *     characters, as an error class name is; otherwise left out;
    *   - `line`: a whole number inside the widget HTML; otherwise left out;
    *   - `column`: a whole number, kept only when `line` is kept.
    *
@@ -149,11 +152,16 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       widgetId: widget.id,
       kind: "script-error",
       // Strings only: String() on an object that the widget made can throw.
-      message: clampText(typeof message === "string" ? message : "unknown error", MAX_FAULT_MESSAGE),
+      message: oneLine(clampText(typeof message === "string" ? message : "unknown error", MAX_FAULT_MESSAGE)),
     };
 
+    // Only a name that looks like an error class name. A repair prompt quotes
+    // the name, so a forged name must not carry a heading or a "Where:" line.
     const name = claim["name"];
-    if (typeof name === "string" && name !== "") fault.name = clampText(name, MAX_FAULT_NAME);
+    if (typeof name === "string") {
+      const cut = clampText(name, MAX_FAULT_NAME);
+      if (/^[\w$.]+$/.test(cut)) fault.name = cut;
+    }
 
     // The browser counts lines in the whole frame document, and the stub and
     // the libraries come before the widget HTML. bodyLines says where the
