@@ -15,9 +15,10 @@
  *                         controls between the host and the widget. See
  *                         `warden()`.
  *
- * One mechanism cannot replace another. Two smaller settings also apply: the
- * Permissions Policy (`FRAME_ALLOW`) and the referrer policy. The attack suite
- * (tests/attacks/) tests the three mechanisms in Chrome, WebKit and Firefox.
+ * One mechanism cannot replace another. Three smaller settings also apply: the
+ * Permissions Policy (`FRAME_ALLOW`), the referrer policy and the warden's
+ * `<base>`. The attack suite (tests/attacks/) tests the three mechanisms in
+ * Chrome, WebKit and Firefox.
  */
 
 import { FRAME_ALLOW, FRAME_REFERRER_POLICY, SANDBOX_TOKENS, WARDEN_CSP, WIDGET_CSP } from "./consts/jail.js";
@@ -90,6 +91,14 @@ ${libs}  </head>
  *
  * Nested frames inherit `sandbox` flags, so the warden needs `allow-scripts`
  * for the widget's scripts to run. It runs no script of its own.
+ *
+ * The `<base>` hides the host page's URL. A `srcdoc` document has no URL of its
+ * own, so it takes its base URL from its parent. Without this tag, the host
+ * URL, with its query and fragment, is the widget's `document.baseURI`, and
+ * `<a href="#x">` is a real navigation that the warden blocks. The tag is here
+ * because the widget cannot change the warden. A `<base>` in the widget's
+ * document does not work: the widget can remove it. A host CSP with `base-uri`
+ * can block this tag (see the README, "Your page's CSP").
  */
 export function warden(innerDocument: string): string {
   return `<!doctype html>
@@ -97,6 +106,7 @@ export function warden(innerDocument: string): string {
   <head>
     <meta http-equiv="Content-Security-Policy" content="${WARDEN_CSP}">
     <meta charset="utf-8">
+    <base href="about:srcdoc">
     <style>
       html, body { margin: 0; height: 100%; }
       iframe { display: block; width: 100%; height: 100%; border: 0; }

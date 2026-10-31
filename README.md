@@ -184,6 +184,14 @@ styles. If your app uses a strict CSP, give a less strict CSP only to the pages
 that show widgets. A later release may remove this requirement by loading the
 warden from a file.
 
+A `base-uri` directive needs one more source. The warden has a
+`<base href="about:srcdoc">` tag, which hides your page's URL from the widget.
+If your CSP blocks this tag, `document.baseURI` in the widget gives your page's
+full URL, with its query and fragment. The widget still starts, and nothing
+reports the change. `base-uri 'none'` and `base-uri 'self'` block the tag. To
+allow it, use `base-uri 'self' about:` or `base-uri about:`. Tests in Chrome,
+WebKit, and Firefox show this behavior.
+
 ## When a widget breaks
 
 A model sometimes writes code that does not work. marzi reports each failure to

@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>base</title></head>
+<body>
+<div id="slot"></div><div id="control"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+  const slot = document.getElementById("slot");
+
+  const runtime = createRuntime({
+    capabilities: [{ name: "probe.report", description: "results",
+      handler: (p) => { log("REPORT " + JSON.stringify(p)); return true; } }],
+    onWidgetFault: (f) => log("FAULT " + JSON.stringify(f)),
+  });
+
+  // Each way to read the base URL, then a click on an in-page link.
+  runtime.render(`<a id="link" href="#sec">jump</a><section id="sec">section</section><script>
+    function read(fn) { try { return String(fn()); } catch (e) { return "THROW " + e.name; } }
+    marzi.call("probe.report", { reads: {
+      baseURI: read(function () { return document.baseURI; }),
+      link: read(function () { return document.getElementById("link").href; }),
+      newDocument: read(function () { return document.implementation.createHTMLDocument("").baseURI; }),
+      parsedDocument: read(function () { return new DOMParser().parseFromString("", "text/html").baseURI; })
+    } }).then(function () {
+      // Click only after the host answered, so the report is not lost with the document.
+      document.getElementById("link").click();
+      setTimeout(function () { marzi.call("probe.report", { alive: location.href }); }, 600);
+    });
+  <\/script>`, slot, { id: "reader" });
+
+  // An inline module script takes its URL from the base URL too.
+  runtime.render(`<script type="module">
+    marzi.call("probe.report", { moduleUrl: String(import.meta.url) });
+  <\/script>`, slot, { id: "module" });
+
+  // Control: a frame with no sandbox and no warden reads the host URL. So the
+  // URL does hold the tokens, and a srcdoc document does get them this way.
+  window.addEventListener("message", (e) => { if (e.data && e.data.control) log("CONTROL " + e.data.control); });
+  const control = document.createElement("iframe");
+  control.srcdoc = `<script>parent.postMessage({ control: "baseURI=" + document.baseURI }, "*");<\/script>`;
+  document.getElementById("control").appendChild(control);
+</script>
+</body></html>
