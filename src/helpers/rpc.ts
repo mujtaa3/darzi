@@ -98,9 +98,10 @@ export function justCrossedRate(w: RateWindow, calls: number): boolean {
  * key, so they pass through unchanged: Date, RegExp and binary data. Their
  * sizes count against the text limit, so that none of them can be the huge
  * value that a string may not be: a RegExp counts its source and flags, an
- * ArrayBuffer its bytes, and a typed array or DataView the WHOLE buffer behind
- * the view, because the structured clone copies the whole buffer. A view over
- * a SharedArrayBuffer is refused. An array longer than MAX_PARAM_NODES is
+ * ArrayBuffer its bytes, a Blob its bytes and type, a File also its name, and
+ * a typed array or DataView the WHOLE buffer behind the view, because the
+ * structured clone copies the whole buffer. A view over a SharedArrayBuffer is
+ * refused. An array longer than MAX_PARAM_NODES is
  * refused before it is copied, because `map` visits every slot, also the
  * empty ones that the node count never sees. It refuses every other type, for
  * example Map, Set or Error. Params are JSON-like data, plus dates and binary
@@ -170,7 +171,9 @@ export function sanitizeParams(input: unknown): SanitizeResult {
       return value;
     }
     if (typeof Blob !== "undefined" && value instanceof Blob) {
-      budget(value.size);
+      // The name and the type are text that a handler may store or send on.
+      const name = typeof File !== "undefined" && value instanceof File ? value.name.length : 0;
+      budget(value.size + value.type.length + name);
       return value;
     }
 

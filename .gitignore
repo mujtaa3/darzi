@@ -9,6 +9,7 @@ src/frame-stub.ts
 docs/
 learnings/
 CLAUDE.md
+review/
 
 # Secrets — the API key lives here; never committed
 .env

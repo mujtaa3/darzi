@@ -33,6 +33,8 @@
     if (ArrayBuffer.isView(v)) return { kind: "view", bytes: v.byteLength, bufferBytes: v.buffer.byteLength };
     if (v instanceof ArrayBuffer) return { kind: "buffer", bytes: v.byteLength };
     if (v instanceof RegExp) return { kind: "regexp", sourceLength: v.source.length };
+    if (v instanceof File) return { kind: "file", nameLength: v.name.length, typeLength: v.type.length };
+    if (v instanceof Blob) return { kind: "blob", typeLength: v.type.length };
     if (typeof v === "string") return { kind: "string", length: v.length };
     return { kind: typeof v };
   }
@@ -71,6 +73,13 @@
       regexp: [
         ["control-string", "probe.echo", function () { return { v: "b".repeat(1100000) }; }],
         ["regexp", "probe.echo", function () { return { v: new RegExp("b".repeat(RE_LENGTH)) }; }]
+      ],
+      file: [
+        ["control-string", "probe.echo", function () { return { v: "b".repeat(1100000) }; }],
+        ["control-small", "probe.echo", function () { return { v: new File(["abc"], "a.txt", { type: "text/plain" }) }; }],
+        ["file-name", "probe.echo", function () { return { v: new File([], "n".repeat(2000000)) }; }],
+        ["file-type", "probe.echo", function () { return { v: new File([], "x", { type: "t".repeat(2000000) }) }; }],
+        ["blob-type", "probe.echo", function () { return { v: new Blob([], { type: "t".repeat(2000000) }) }; }]
       ]
     };
     function run(i) {
