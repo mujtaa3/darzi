@@ -64,6 +64,9 @@ export const WIDGET_CSP = [
  */
 export const FRAME_ALLOW = "";
 
+/** The warden's base URL. It hides the host page's URL from the widget (see `warden`). */
+export const WARDEN_BASE_URL = "about:srcdoc";
+
 /**
  * The referrer policy of both frames: send no `Referer` header.
  *

@@ -82,6 +82,11 @@ export interface RuntimeOptions {
 
 /** What `createRuntime` returns. */
 export interface Runtime {
-  /** Render widget HTML into `container`, and return the widget's handle. */
+  /**
+   * Render widget HTML into `container`, and return the widget's handle. It
+   * throws and shows nothing if the id is live, the widget HTML has forbidden
+   * text, a library is unknown, or the page's CSP blocks the warden's `<base>`
+   * (see the README, "Your page's CSP").
+   */
   render(body: WidgetBody, container: HTMLElement, options?: RenderOptions): Widget;
 }

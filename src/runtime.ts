@@ -24,6 +24,7 @@ import {
   VERSION,
 } from "./consts/runtime.js";
 import { abandonReason, clampText, newWidgetId, oneLine, position, untilAborted } from "./helpers/runtime.js";
+import { baseTagAllowed } from "./helpers/jail.js";
 import { scaffold, warden } from "./jail.js";
 import {
   fail,
@@ -508,6 +509,17 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       throw new Error(
         `widget refused: its HTML contains forbidden text "${hit}" ` +
           "(a check for obvious misuse, not a containment control)",
+      );
+    }
+
+    // The host's CSP must let the warden's <base> work. If it does not, the
+    // widget can read this page's URL, and nothing else would show it.
+    if (!baseTagAllowed(container.ownerDocument)) {
+      const reason = "this page's CSP blocks the warden's <base>";
+      audit({ widgetId: id, method: "(host CSP)", decision: "refused", reason });
+      throw new Error(
+        `widget refused: ${reason}, so the widget could read this page's URL. ` +
+          "Add about: to your base-uri directive, for example base-uri 'self' about:",
       );
     }
 

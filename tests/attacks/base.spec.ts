@@ -13,8 +13,7 @@
  * the widget's document, with no fault.
  *
  * A host CSP with `base-uri` also applies in the warden, so it can block the
- * `<base>`. The last test pins this limit for each engine, as webrtc.spec.ts
- * pins its own, so that a change is noticed. The README states it.
+ * `<base>`. `render` finds this with a hidden frame, and refuses the widget.
  */
 import type { Page } from "@playwright/test";
 import { test, expect } from "../harness/witness";
@@ -65,19 +64,29 @@ test("an in-page link keeps the widget alive, with no fault", async ({ page }) =
 });
 
 // The policy comes as a response header, as it does on a real host.
-for (const [policy, hidden] of [
+for (const [policy, allowed] of [
   ["base-uri 'none'", false],
   ["base-uri 'self'", false],
   ["base-uri 'self' about:", true],
   ["base-uri about:", true],
 ] as const) {
-  test(`host CSP ${policy}: the host URL is ${hidden ? "hidden" : "readable"}`, async ({ page }) => {
+  test(`host CSP ${policy}: render ${allowed ? "works" : "refuses"}`, async ({ page }) => {
     await page.route("**/tests/pages/base.html*", async (route) => {
       const response = await route.fetch();
       await route.fulfill({ response, headers: { ...response.headers(), "content-security-policy": policy } });
     });
-    const { reads } = await readBase(page);
-    if (hidden) expect(reads.baseURI).toBe("about:srcdoc");
-    else expect(reads.baseURI).toContain("SECRET-IN-QUERY");
+    if (allowed) {
+      const { reads } = await readBase(page);
+      expect(reads.baseURI).toBe("about:srcdoc");
+      return;
+    }
+    const attack = await openAttack(page, "base?token=SECRET-IN-QUERY#SECRET-IN-FRAGMENT");
+    await attack.untilCount("REFUSED ", 2);
+    expect((await attack.logged("REFUSED "))[0]).toContain("base-uri");
+    expect((await attack.logged("AUDIT "))[0]).toContain("(host CSP)");
+    // Nothing stays on the page: no widget frame, and not the check's own frame.
+    expect(await page.locator("#slot iframe").count()).toBe(0);
+    expect(await page.locator("html > iframe").count()).toBe(0);
+    expect(await attack.reports()).toEqual([]);
   });
 }

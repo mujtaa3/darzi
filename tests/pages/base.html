@@ -12,10 +12,15 @@
     capabilities: [{ name: "probe.report", description: "results",
       handler: (p) => { log("REPORT " + JSON.stringify(p)); return true; } }],
     onWidgetFault: (f) => log("FAULT " + JSON.stringify(f)),
+    onAudit: (e) => { if (e.decision === "refused") log(`AUDIT ${e.method} · ${e.reason}`); },
   });
 
+  const render = (html, id) => {
+    try { runtime.render(html, slot, { id }); } catch (e) { log("REFUSED " + e.message); }
+  };
+
   // Each way to read the base URL, then a click on an in-page link.
-  runtime.render(`<a id="link" href="#sec">jump</a><section id="sec">section</section><script>
+  render(`<a id="link" href="#sec">jump</a><section id="sec">section</section><script>
     function read(fn) { try { return String(fn()); } catch (e) { return "THROW " + e.name; } }
     marzi.call("probe.report", { reads: {
       baseURI: read(function () { return document.baseURI; }),
@@ -27,12 +32,12 @@
       document.getElementById("link").click();
       setTimeout(function () { marzi.call("probe.report", { alive: location.href }); }, 600);
     });
-  <\/script>`, slot, { id: "reader" });
+  <\/script>`, "reader");
 
   // An inline module script takes its URL from the base URL too.
-  runtime.render(`<script type="module">
+  render(`<script type="module">
     marzi.call("probe.report", { moduleUrl: String(import.meta.url) });
-  <\/script>`, slot, { id: "module" });
+  <\/script>`, "module");
 
   // Control: a frame with no sandbox and no warden reads the host URL. So the
   // URL does hold the tokens, and a srcdoc document does get them this way.

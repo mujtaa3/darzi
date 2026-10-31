@@ -21,7 +21,7 @@
  * Chrome, WebKit and Firefox.
  */
 
-import { FRAME_ALLOW, FRAME_REFERRER_POLICY, SANDBOX_TOKENS, WARDEN_CSP, WIDGET_CSP } from "./consts/jail.js";
+import { FRAME_ALLOW, FRAME_REFERRER_POLICY, SANDBOX_TOKENS, WARDEN_BASE_URL, WARDEN_CSP, WIDGET_CSP } from "./consts/jail.js";
 import { FRAME_STUB } from "./frame-stub.js";
 import { attributeSafe, inlineScriptSafe, lineBreaks } from "./helpers/jail.js";
 import type { Scaffold } from "./types/jail.js";
@@ -98,7 +98,7 @@ ${libs}  </head>
  * `<a href="#x">` is a real navigation that the warden blocks. The tag is here
  * because the widget cannot change the warden. A `<base>` in the widget's
  * document does not work: the widget can remove it. A host CSP with `base-uri`
- * can block this tag (see the README, "Your page's CSP").
+ * can block this tag, so `render` checks first (see `baseTagAllowed`).
  */
 export function warden(innerDocument: string): string {
   return `<!doctype html>
@@ -106,7 +106,7 @@ export function warden(innerDocument: string): string {
   <head>
     <meta http-equiv="Content-Security-Policy" content="${WARDEN_CSP}">
     <meta charset="utf-8">
-    <base href="about:srcdoc">
+    <base href="${WARDEN_BASE_URL}">
     <style>
       html, body { margin: 0; height: 100%; }
       iframe { display: block; width: 100%; height: 100%; border: 0; }
