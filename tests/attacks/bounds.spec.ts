@@ -48,6 +48,15 @@ test("an array with a huge length is refused before the host walks it", async ({
   expect(r.handlers.filter((h) => h.kind === "array").map((h) => h.length), "array lengths that reached the handler").toEqual([]);
 });
 
+test("repeated arrays with holes are refused before the host walks them", async ({ page }) => {
+  const r = await run(page, "holes");
+  // Control: a short array with a hole still reaches the handler.
+  expect(r.handlers.filter((h) => h.kind === "array").map((h) => h.length), "array lengths that reached the handler").toEqual([3]);
+  // The same value is refused as a call and as saved state, before any JSON is made.
+  expect(r.refusals("too many values"), "refusals for 'too many values'").toBe(2);
+  expect(r.log.filter((l) => l.startsWith("STATE ")), "saves that reached the store").toEqual([]);
+});
+
 test("a widget's method name reaches onAudit and the reply with a bound", async ({ page }) => {
   const r = await run(page, "method");
   // Control: an unknown short method is refused and audited.

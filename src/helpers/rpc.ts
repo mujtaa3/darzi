@@ -101,10 +101,9 @@ export function justCrossedRate(w: RateWindow, calls: number): boolean {
  * ArrayBuffer its bytes, a Blob its bytes and type, a File also its name, and
  * a typed array or DataView the WHOLE buffer behind the view, because the
  * structured clone copies the whole buffer. A view over a SharedArrayBuffer is
- * refused. An array longer than MAX_PARAM_NODES is
- * refused before it is copied, because `map` visits every slot, also the
- * empty ones that the node count never sees. It refuses every other type, for
- * example Map, Set or Error. Params are JSON-like data, plus dates and binary
+ * refused. Every slot of an array counts as a node, also an empty one, because
+ * the copy makes a slot for it. An empty slot becomes `undefined`. It refuses
+ * every other type, for example Map, Set or Error. Params are JSON-like data, plus dates and binary
  * data. A widget that needs more can encode it.
  *
  * The new objects keep the normal prototype. A null prototype would break
@@ -133,13 +132,13 @@ export function sanitizeParams(input: unknown): SanitizeResult {
     if (value === null || typeof value !== "object") return value;
 
     if (Array.isArray(value)) {
-      // `map` visits every slot up to `length`, also the empty ones, which the
-      // node count below never sees. A widget can make `new Array(1e8)` at no
-      // cost, so check the length first (tested: one such array blocked the
-      // host page for 0.2 to 2.4 s).
-      if (value.length > MAX_PARAM_NODES) throw new RangeError("too many values");
+      // `Array.from` calls `walk` for every slot, also an empty one, so each slot
+      // counts as a node. `map` skips an empty slot but still makes room for it.
+      // So 9998 references to one empty array of length 10000 got past the count,
+      // and the host made 1e8 slots from a 52 KB message (tested: this blocked the
+      // host page for up to 1.9 s). `new Array(1e8)` now stops at the node limit.
       // A copy by index also drops extra properties that are not indexes.
-      return value.map((item) => walk(item, depth + 1));
+      return Array.from(value, (item) => walk(item, depth + 1));
     }
 
     const proto = Object.getPrototypeOf(value);
