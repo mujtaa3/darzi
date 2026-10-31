@@ -97,12 +97,13 @@ export function justCrossedRate(w: RateWindow, calls: number): boolean {
  * It builds new plain objects and arrays. Some types cannot carry a prototype
  * key, so they pass through unchanged: Date, RegExp and binary data. Their
  * byte sizes count against the text limit, so that an ArrayBuffer cannot be
- * the huge value that a string may not be. For a typed array, it counts the
- * view's bytes, not the whole buffer behind the view. An array longer than
- * MAX_PARAM_NODES is refused before it is copied, because `map` visits every
- * slot, also the empty ones that the node count never sees. It refuses every
- * other type, for example Map, Set or Error. Params are JSON-like data, plus
- * dates and binary data. A widget that needs more can encode it.
+ * the huge value that a string may not be. A typed array or DataView counts
+ * the WHOLE buffer behind the view, because the structured clone copies the
+ * whole buffer. A view over a SharedArrayBuffer is refused. An array longer
+ * than MAX_PARAM_NODES is refused before it is copied, because `map` visits
+ * every slot, also the empty ones that the node count never sees. It refuses
+ * every other type, for example Map, Set or Error. Params are JSON-like data,
+ * plus dates and binary data. A widget that needs more can encode it.
  *
  * The new objects keep the normal prototype. A null prototype would break
  * `params.hasOwnProperty(...)` in handler code, and it adds no protection
@@ -156,7 +157,10 @@ export function sanitizeParams(input: unknown): SanitizeResult {
       return value;
     }
     if (ArrayBuffer.isView(value)) {
-      budget(value.byteLength);
+      // The clone copies the whole buffer, not only the view's window on it.
+      // A view over a SharedArrayBuffer is refused: shared memory is not data.
+      if (!(value.buffer instanceof ArrayBuffer)) throw new RangeError("unsupported value type");
+      budget(value.buffer.byteLength);
       return value;
     }
     if (typeof Blob !== "undefined" && value instanceof Blob) {
