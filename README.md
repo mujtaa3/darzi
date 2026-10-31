@@ -298,6 +298,18 @@ A probe in `tests/probes/` asks a real model to repair a widget whose error
 text contains an attack. The probe needs an API key, so `npm test` does not run
 it.
 
+## Browsers
+
+marzi needs Chrome or Edge 98, Firefox 97, or Safari 15.4, or a later version.
+All of these are from early 2022. In an older browser, capability calls fail.
+
+The attack suite, which controls each release, runs only in current versions of
+Chrome, WebKit, and Firefox. We also ran it once by hand in Playwright's builds
+of Chromium 101 and 115, Firefox 97 and 115, and WebKit 15.4 and 17.0. No widget
+request reached the witness. In both WebKit builds, an `<object>` element crashed
+the page, also on a page with no marzi. Old browsers do not get security fixes.
+If you must rely on the jail, ask your users to run current versions.
+
 ## Layout
 
 | Path | What |

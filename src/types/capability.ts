@@ -10,7 +10,9 @@ export interface CallContext {
   /**
    * Aborts when the call passes `callTimeoutMs`, or when the widget is destroyed.
    * Pass it to `fetch` and to any other work that can stop. Otherwise that work
-   * keeps running after the runtime stops waiting.
+   * keeps running after the runtime stops waiting. The runtime stops waiting when
+   * this signal aborts, so a result that comes after the abort does not reach the
+   * widget.
    */
   signal: AbortSignal;
 }

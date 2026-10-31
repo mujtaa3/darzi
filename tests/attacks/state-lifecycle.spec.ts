@@ -7,9 +7,18 @@
  * handed — so a late write cannot land after teardown.
  */
 import { test, expect } from "../harness/witness";
-import { openAttack } from "../harness/attack";
+import { openAttack, removeNewAbortFunctions } from "../harness/attack";
+import type { Page } from "@playwright/test";
 
-test("store calls are cut off at the deadline and on destroy, and told so", async ({ page }) => {
+test("store calls are cut off at the deadline and on destroy, and told so", ({ page }) => storeCalls(page));
+
+// See deadlines.spec.ts: marzi must not need these two functions.
+test("the same, without AbortSignal.any and AbortSignal.timeout", async ({ page }) => {
+  await removeNewAbortFunctions(page);
+  await storeCalls(page);
+});
+
+async function storeCalls(page: Page) {
   const attack = await openAttack(page, "state-lifecycle");
   // Each of these only appears if the runtime gave up on the hung store; before
   // the fix the calls waited out the stub's 60 s backstop instead.
@@ -25,7 +34,9 @@ test("store calls are cut off at the deadline and on destroy, and told so", asyn
   // Deadline: both calls reject promptly with a plain message…
   for (const tag of ["deadline-save", "deadline-load"]) {
     expect(by[tag], tag).toMatchObject({ ok: false, error: "state operation timed out" });
-    expect(Number(by[tag]?.ms), `${tag} settled in ms`).toBeLessThan(2_000);
+    // Far from the 400 ms deadline, on purpose: a stalled machine must not fail
+    // this. It only tells the deadline apart from the stub's 60 s backstop.
+    expect(Number(by[tag]?.ms), `${tag} settled in ms`).toBeLessThan(10_000);
   }
   // …the store was handed a signal and saw it abort on the timeout…
   expect(store).toContain("deadline put started signal=yes");
@@ -42,4 +53,4 @@ test("store calls are cut off at the deadline and on destroy, and told so", asyn
 
   // Control: a healthy store round-trips.
   expect(by["healthy"]).toMatchObject({ ok: true, value: { n: 7 } });
-});
+}

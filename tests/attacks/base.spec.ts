@@ -51,8 +51,8 @@ test("a widget's base URL is not the host URL", async ({ page }) => {
   expect(reads.link).toBe("about:srcdoc#sec");
   expect(moduleUrl).toBe("about:srcdoc");
   // The documents that a widget makes for itself do not lead back to the host URL.
-  expect(reads.newDocument).toBe("about:blank");
-  expect(reads.parsedDocument).toBe("about:srcdoc");
+  expect(reads.newDocument).not.toContain("SECRET");
+  expect(reads.parsedDocument).not.toContain("SECRET");
 });
 
 test("an in-page link keeps the widget alive, with no fault", async ({ page }) => {

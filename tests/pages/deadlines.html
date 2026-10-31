@@ -1,0 +1,298 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>deadlines</title></head>
+<body>
+<div id="slot"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+  const slot = document.getElementById("slot");
+
+  // The deadline in the scenarios that reach it.
+  const MS = 400;
+  const onAudit = (e) => log(`AUDIT ${e.widgetId} ${e.method} ${e.decision}${e.reason ? " · " + e.reason : ""}`);
+  const never = new Promise(() => {});
+
+  // Log what a signal says when the call starts, and when and why it aborts.
+  function watch(tag, signal) {
+    const t0 = performance.now();
+    const why = () => `${signal.reason && signal.reason.name}:${signal.reason && signal.reason.message}`;
+    log(`START ${tag} aborted=${signal.aborted}`);
+    if (signal.aborted) log(`ABORT ${tag} ${why()} after=0`);
+    else signal.addEventListener("abort", () => log(`ABORT ${tag} ${why()} after=${Math.round(performance.now() - t0)}`));
+    // Control: this timer starts after the deadline's timer and waits longer. A
+    // browser runs timers in that order at any load, so the test needs no clock.
+    setTimeout(() => log(`PAST ${tag}`), MS + 100);
+  }
+
+  const report = { name: "probe.report", description: "checkpoint",
+    handler: (p) => { log("REPORT " + JSON.stringify(p)); return true; } };
+  const quick = { name: "probe.quick", description: "answers at once",
+    handler: (p, { signal }) => { watch(p.tag, signal); return "answer"; } };
+  const hang = { name: "probe.hang", description: "never answers",
+    handler: (p, { signal }) => { watch(p.tag, signal); return never; } };
+
+  // A store whose calls never answer.
+  const hangingStore = {
+    getState: (id, signal) => { watch("get", signal); return never; },
+    putState: (id, json, signal) => { watch("put", signal); return never; },
+  };
+
+  // A widget that runs one call, and reports how it settled.
+  const settled = (tag, call) => `<script>
+    ${call}.then(
+      function (v) { marzi.call("probe.report", { tag: "${tag}", ok: true, value: v }); },
+      function (e) { marzi.call("probe.report", { tag: "${tag}", ok: false, error: e.message }); });
+  <\/script>`;
+
+  const SCENARIOS = {
+    // Control: a call that answers. Its deadline passes later, with no effect.
+    answers() {
+      createRuntime({ capabilities: [report, quick], callTimeoutMs: MS, onAudit })
+        .render(settled("quick", 'marzi.call("probe.quick", { tag: "quick" })'), slot, { id: "wid" });
+    },
+
+    // A handler that never answers stops at the deadline.
+    deadline() {
+      createRuntime({ capabilities: [report, hang], callTimeoutMs: MS, onAudit })
+        .render(settled("hang", 'marzi.call("probe.hang", { tag: "hang" })'), slot, { id: "wid" });
+    },
+
+    // The way the README tells a handler to use the signal. The route never answers.
+    fetch() {
+      const viaFetch = { name: "probe.fetch", description: "a fetch that never answers",
+        handler: (p, { signal }) => fetch("/hang-forever", { signal }).then((r) => r.json()).catch((e) => {
+          log(`FETCH rejected ${e.name}`);
+          throw e;
+        }) };
+      createRuntime({ capabilities: [report, viaFetch], callTimeoutMs: MS, onAudit })
+        .render(settled("fetch", 'marzi.call("probe.fetch")'), slot, { id: "wid" });
+    },
+
+    // A handler that reacts to the abort after an await. The runtime has already
+    // stopped waiting, as it does on destroy, so this result does not count.
+    "abort-aware"() {
+      const aware = { name: "probe.aware", description: "rejects some time after the abort",
+        handler: async (p, { signal }) => {
+          await new Promise((_, reject) => signal.addEventListener("abort", () => reject(new Error("stopped"))));
+        } };
+      createRuntime({ capabilities: [report, aware], callTimeoutMs: MS, onAudit })
+        .render(settled("aware", 'marzi.call("probe.aware")'), slot, { id: "wid" });
+    },
+
+    // A second call gets its own full deadline.
+    "own-deadline"() {
+      createRuntime({ capabilities: [report, hang], callTimeoutMs: MS, onAudit })
+        .render(`<script>
+          marzi.call("probe.hang", { tag: "first" });
+          setTimeout(function () { marzi.call("probe.hang", { tag: "second" }); }, 200);
+        <\/script>`, slot, { id: "wid" });
+    },
+
+    // Destroy stops the call. The deadline then passes, with no second effect.
+    destroy() {
+      const rt = createRuntime({ capabilities: [{ ...hang, handler: (p, c) => {
+        watch(p.tag, c.signal);
+        widget.destroy();
+        log("DESTROYED");
+        setTimeout(() => log("PAST-DEADLINE"), MS + 200);
+        return never;
+      } }], callTimeoutMs: MS, onAudit });
+      const widget = rt.render(`<script>marzi.call("probe.hang", { tag: "doomed" });<\/script>`, slot, { id: "wid" });
+    },
+
+    // Destroy stops every call of that widget, and no call of any other widget.
+    async isolation() {
+      let started = 0;
+      let allStarted;
+      const begun = new Promise((r) => { allStarted = r; });
+      const rt = createRuntime({ capabilities: [report, { ...hang, handler: (p, c) => {
+        watch(p.tag, c.signal);
+        if (++started === 3) allStarted();
+        return never;
+      } }], onAudit });
+      const doomed = rt.render(`<script>
+        marzi.call("probe.hang", { tag: "doomed-1" });
+        marzi.call("probe.hang", { tag: "doomed-2" });
+      <\/script>`, slot, { id: "doomed" });
+      const other = rt.render(`<script>
+        marzi.call("probe.hang", { tag: "other" });
+        setInterval(function () { marzi.call("probe.report", { tag: "other-alive" }); }, 100);
+      <\/script>`, slot, { id: "other" });
+      await begun;
+      doomed.destroy();
+      log("DESTROYED doomed");
+      const seen = window.__log.length;
+      await new Promise((resolve) => {
+        const check = setInterval(() => {
+          if (window.__log.slice(seen).some((l) => l.includes("other-alive"))) { clearInterval(check); resolve(); }
+        }, 20);
+      });
+      log("OTHER-ALIVE");
+      other.destroy();
+      log("DESTROYED other");
+    },
+
+    // A host can destroy the widget from inside onAudit. So the widget's
+    // lifetime has already ended when the capability call gets its signal.
+    "audit-destroy"() {
+      const rt = createRuntime({ capabilities: [hang], callTimeoutMs: MS, onAudit: (e) => {
+        onAudit(e);
+        if (e.method === "probe.hang" && e.decision === "dispatched") widget.destroy();
+      } });
+      const widget = rt.render(`<script>marzi.call("probe.hang", { tag: "late" });<\/script>`, slot, { id: "wid" });
+    },
+
+    // The state methods get the signal first, and record "dispatched" after.
+    "audit-destroy-state"() {
+      const rt = createRuntime({ capabilities: [], store: hangingStore, callTimeoutMs: MS, onAudit: (e) => {
+        onAudit(e);
+        if (e.method === "marzi/loadState" && e.decision === "dispatched") widget.destroy();
+      } });
+      const widget = rt.render(`<script>marzi.loadState();<\/script>`, slot, { id: "wid" });
+    },
+
+    // deadlineSignal alone. It counts the timers that are still live, and the
+    // listeners that a parent's abort still reaches.
+    async helper() {
+      const { deadlineSignal } = await import("/dist/helpers/runtime.js");
+      const realSet = window.setTimeout, realClear = window.clearTimeout;
+      const wait = (ms) => new Promise((r) => realSet(r, ms));
+      const timers = { set: 0, live: new Set() };
+      window.setTimeout = (fn, ms) => {
+        timers.set += 1;
+        const id = realSet(() => { timers.live.delete(id); fn(); }, ms);
+        timers.live.add(id);
+        return id;
+      };
+      window.clearTimeout = (id) => { timers.live.delete(id); realClear(id); };
+
+      function countingParent() {
+        const parent = new AbortController();
+        const { signal } = parent;
+        const add = signal.addEventListener.bind(signal), remove = signal.removeEventListener.bind(signal);
+        const wrapped = new Map();
+        const reached = { count: 0 };
+        signal.addEventListener = (type, fn, options) => {
+          const counting = (e) => { reached.count += 1; fn(e); };
+          wrapped.set(fn, counting);
+          add(type, counting, options);
+        };
+        signal.removeEventListener = (type, fn, options) => remove(type, wrapped.get(fn) ?? fn, options);
+        return { parent, reached };
+      }
+      const counted = async (name, fn) => {
+        timers.set = 0;
+        timers.live.clear();
+        const { reached, ...out } = await fn();
+        log("RESULT " + JSON.stringify({ [name]: { ...out, set: timers.set, live: timers.live.size, reached: reached.count } }));
+      };
+
+      // An ended parent: nothing to wait for, so no timer and no listener.
+      await counted("ended-parent", async () => {
+        const { parent, reached } = countingParent();
+        parent.abort(new Error("gone"));
+        return { aborted: deadlineSignal(parent.signal, 50).aborted, reached };
+      });
+
+      // The parent ends first: its abort reaches the listener, and the timer goes.
+      await counted("parent-first", async () => {
+        const { parent, reached } = countingParent();
+        deadlineSignal(parent.signal, 60000);
+        parent.abort();
+        return { reached };
+      });
+
+      // The deadline comes first: a later abort of the parent reaches nothing.
+      await counted("deadline-first", async () => {
+        const { parent, reached } = countingParent();
+        const signal = deadlineSignal(parent.signal, 20);
+        await wait(120);
+        const name = signal.reason && signal.reason.name;
+        parent.abort(new Error("late"));
+        return { name, afterLateAbort: signal.reason && signal.reason.name, reached };
+      });
+
+      // Many calls in one widget's life: no listener stays on the parent.
+      await counted("many", async () => {
+        const { parent, reached } = countingParent();
+        const signals = Array.from({ length: 1000 }, () => deadlineSignal(parent.signal, 1));
+        await wait(300);
+        parent.abort();
+        return { aborted: signals.filter((s) => s.aborted).length, timedOut: signals.filter((s) => s.reason.name === "TimeoutError").length, reached };
+      });
+      log("HELPER-DONE");
+    },
+
+    // The same script against the native functions and against deadlineSignal.
+    async parity() {
+      const { deadlineSignal } = await import("/dist/helpers/runtime.js");
+      const native = typeof AbortSignal.any === "function" && typeof AbortSignal.timeout === "function"
+        ? (parent, ms) => AbortSignal.any([parent, AbortSignal.timeout(ms)])
+        : null;
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+      async function behaviour(make) {
+        const out = {};
+        const watched = (signal) => {
+          const seen = { events: 0 };
+          signal.addEventListener("abort", () => { seen.events += 1; seen.reasonInEvent = signal.reason && signal.reason.name; });
+          return seen;
+        };
+        {
+          const parent = new AbortController();
+          const reason = new Error("gone");
+          parent.abort(reason);
+          const signal = make(parent.signal, 50);
+          const seen = watched(signal);
+          await wait(120);
+          out.endedParent = { aborted: signal.aborted, sameReason: signal.reason === reason, events: seen.events };
+        }
+        {
+          const parent = new AbortController();
+          const signal = make(parent.signal, 60000);
+          const seen = watched(signal);
+          const before = signal.aborted;
+          const reason = new DOMException("widget destroyed", "AbortError");
+          parent.abort(reason);
+          out.parentFirst = { before, atOnce: signal.aborted, sameReason: signal.reason === reason, events: seen.events, name: seen.reasonInEvent };
+        }
+        {
+          const parent = new AbortController();
+          const signal = make(parent.signal, 60000);
+          parent.abort();
+          out.noReason = { name: signal.reason && signal.reason.name };
+        }
+        {
+          const parent = new AbortController();
+          const signal = make(parent.signal, 40);
+          const seen = watched(signal);
+          const before = signal.aborted;
+          await wait(200);
+          const reason = signal.reason;
+          parent.abort(new Error("late"));
+          out.deadlineFirst = { before, aborted: signal.aborted, name: reason && reason.name, isDomException: reason instanceof DOMException,
+            code: reason && reason.code, events: seen.events, sameAfterLateAbort: signal.reason === reason };
+        }
+        {
+          const parent = new AbortController();
+          const short = make(parent.signal, 40);
+          const long = make(parent.signal, 60000);
+          await wait(200);
+          const longAlive = !long.aborted;
+          const reason = new Error("gone");
+          parent.abort(reason);
+          out.twoCalls = { shortName: short.reason && short.reason.name, longAlive, longSame: long.reason === reason, shortUnchanged: short.reason !== reason };
+        }
+        return out;
+      }
+
+      const mine = await behaviour(deadlineSignal);
+      log("PARITY " + JSON.stringify({ mine, native: native ? await behaviour(native) : null }));
+    },
+  };
+
+  const probe = new URLSearchParams(location.search).get("probe");
+  await SCENARIOS[probe]();
+</script>
+</body></html>

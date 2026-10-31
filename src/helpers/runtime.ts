@@ -37,6 +37,39 @@ export function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<
   ]);
 }
 
+/**
+ * A signal that aborts after `ms`, or when `parent` aborts, whichever comes
+ * first. Its reason is a TimeoutError, or the parent's reason.
+ *
+ * It does the work of `AbortSignal.any([parent, AbortSignal.timeout(ms)])`.
+ * Those two functions are newer than all else that marzi needs. Safari got `any`
+ * only in 17.4, and Chrome's `timeout` gave the wrong error before 124.
+ *
+ * The first to happen removes the other, because a widget can live for a long
+ * time and make many calls. The deadline removes its listener by name. The
+ * `signal` option of addEventListener is shorter, but zone.js before 0.14.3
+ * (Angular) keeps one native listener for each target, with the options of the
+ * first add. So the first deadline would stop every later abort.
+ */
+export function deadlineSignal(parent: AbortSignal, ms: number): AbortSignal {
+  const deadline = new AbortController();
+  // An "abort" event fires only once, so a listener would wait for ever.
+  if (parent.aborted) {
+    deadline.abort(parent.reason);
+    return deadline.signal;
+  }
+  const onParentAbort = (): void => {
+    clearTimeout(timer);
+    deadline.abort(parent.reason);
+  };
+  const timer = setTimeout(() => {
+    parent.removeEventListener("abort", onParentAbort);
+    deadline.abort(new DOMException("call timed out", "TimeoutError"));
+  }, ms);
+  parent.addEventListener("abort", onParentAbort);
+  return deadline.signal;
+}
+
 /** Why the runtime stopped waiting for a call. For the audit only; the widget never sees it. */
 export function abandonReason(widget: LiveWidget): string {
   return widget.lifetime.signal.aborted ? "widget destroyed" : "timed out";

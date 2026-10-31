@@ -23,7 +23,7 @@ import {
   UTF8,
   VERSION,
 } from "./consts/runtime.js";
-import { abandonReason, clampText, newWidgetId, oneLine, position, untilAborted } from "./helpers/runtime.js";
+import { abandonReason, clampText, deadlineSignal, newWidgetId, oneLine, position, untilAborted } from "./helpers/runtime.js";
 import { baseTagAllowed } from "./helpers/jail.js";
 import { scaffold, warden } from "./jail.js";
 import {
@@ -93,10 +93,10 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   }
 
   // The number options. Each must be a whole number in its range. A bad value
-  // would show only later, inside a widget: `AbortSignal.timeout(Infinity)`
-  // throws after the audit says "dispatched"; a timer delay over MAX_TIMER_MS
-  // fires at once; and a `callTimeoutMs` of STUB_NO_ANSWER_MS or more lets the
-  // stub give up before the host does.
+  // would show only later, inside a widget. A timer delay of NaN, of Infinity or
+  // over MAX_TIMER_MS fires at once. Each call then stops at once, or each widget
+  // reports `never-started`. A `callTimeoutMs` of STUB_NO_ANSWER_MS or more lets
+  // the stub stop before the host does.
   const checkNumber = (name: string, value: unknown, max: number): void => {
     if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > max) {
       throw new Error(`option "${name}" must be a whole number from 1 to ${max}`);
@@ -216,10 +216,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
    * so that each call gets its own full deadline.
    */
   function callSignal(widget: LiveWidget): AbortSignal {
-    return AbortSignal.any([
-      widget.lifetime.signal,
-      AbortSignal.timeout(options.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS),
-    ]);
+    return deadlineSignal(widget.lifetime.signal, options.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS);
   }
 
   /**

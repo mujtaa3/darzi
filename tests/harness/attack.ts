@@ -56,5 +56,18 @@ export async function openAttack(page: Page, name: string): Promise<Attack> {
   };
 }
 
+/**
+ * Remove `AbortSignal.any` and `AbortSignal.timeout` from each document of this
+ * page, before its scripts run. Call it before `openAttack`. marzi must not need
+ * them: Safari got `any` only in 17.4, and `timeout` only in 16.
+ */
+export async function removeNewAbortFunctions(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const signal = AbortSignal as unknown as { any?: unknown; timeout?: unknown };
+    delete signal.any;
+    delete signal.timeout;
+  });
+}
+
 /** A brief settle after the control has landed, for anything still in flight. */
 export const settle = (page: Page, ms = 600) => page.waitForTimeout(ms);
