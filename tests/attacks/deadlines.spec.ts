@@ -104,6 +104,48 @@ for (const mode of ["as it is", "without the new functions"] as const) {
       expect(await attack.logged("AUDIT wid probe.aware")).toEqual([" dispatched", " refused · timed out"]);
     });
 
+    test("a handler that answers inside its abort listener still answers", async ({ page }) => {
+      const attack = await open(page, "direct-resolve");
+      await attack.untilLog('"tag":"direct"');
+
+      expect((await attack.reports())[0]).toEqual({ tag: "direct", ok: true, value: { partial: true } });
+      expect(await attack.logged("AUDIT wid probe.direct")).toEqual([" dispatched"]);
+    });
+
+    test("a handler that rejects inside its abort listener counts as failed", async ({ page }) => {
+      const attack = await open(page, "direct-reject");
+      await attack.untilLog('"tag":"direct"');
+
+      expect((await attack.reports())[0]).toEqual({ tag: "direct", ok: false, error: "capability failed" });
+      expect(await attack.logged("AUDIT wid probe.direct")).toEqual([" dispatched", " refused · capability failed"]);
+    });
+
+    test("a store that never answers stops at the deadline", async ({ page }) => {
+      const attack = await open(page, "store-deadline");
+      await attack.untilLog('"tag":"load"');
+      await attack.untilLog('"tag":"save"');
+      await attack.untilLog("PAST get");
+      await attack.untilLog("PAST put");
+
+      const log = await attack.log();
+      for (const tag of ["get", "put"]) {
+        expect(lines(log, `ABORT ${tag}`)[0], tag).toContain("TimeoutError:");
+        expect(beforeControl(log, tag), `${tag} ends in time`).toBe(true);
+      }
+      const replies = Object.fromEntries((await attack.reports()).map((r) => [r.tag, r.error]));
+      expect(replies).toEqual({ load: "state operation timed out", save: "state operation timed out" });
+      expect(await attack.logged("AUDIT wid marzi/loadState")).toEqual([" dispatched", " refused · timed out"]);
+      expect(await attack.logged("AUDIT wid marzi/saveState")).toEqual([" dispatched", " refused · timed out"]);
+    });
+
+    test("a store's own result after the abort does not count", async ({ page }) => {
+      const attack = await open(page, "store-abort-aware");
+      await attack.untilLog('"tag":"load"');
+
+      expect((await attack.reports())[0]).toEqual({ tag: "load", ok: false, error: "state operation timed out" });
+      expect(await attack.logged("AUDIT wid marzi/loadState")).toEqual([" dispatched", " refused · timed out"]);
+    });
+
     test("each call gets its own full deadline", async ({ page }) => {
       const attack = await open(page, "own-deadline");
       await attack.untilLog("PAST first");
@@ -185,7 +227,9 @@ test("deadlineSignal removes its timer and its listener", async ({ page }) => {
   expect(results["many"]).toEqual({ aborted: 1000, timedOut: 1000, set: 1000, live: 0, reached: 0 });
 });
 
-test("deadlineSignal does what AbortSignal.any and AbortSignal.timeout do", async ({ page }) => {
+// This compares state and reasons, not the order of abort listeners. That order
+// differs at the deadline: see "a handler's own result after the abort".
+test("deadlineSignal gives the same state and reasons as the native functions", async ({ page }) => {
   const attack = await openAttack(page, "deadlines?probe=parity");
   await attack.untilLog("PARITY");
   const [line] = await attack.logged("PARITY ");

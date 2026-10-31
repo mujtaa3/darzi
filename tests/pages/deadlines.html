@@ -32,6 +32,15 @@
   const hang = { name: "probe.hang", description: "never answers",
     handler: (p, { signal }) => { watch(p.tag, signal); return never; } };
 
+  // A store that rejects some time after the abort.
+  const lateStore = {
+    getState: async (id, signal) => {
+      await new Promise((_, reject) => signal.addEventListener("abort", () => reject(new Error("stopped"))));
+      return null;
+    },
+    putState: async () => {},
+  };
+
   // A store whose calls never answer.
   const hangingStore = {
     getState: (id, signal) => { watch("get", signal); return never; },
@@ -78,6 +87,34 @@
         } };
       createRuntime({ capabilities: [report, aware], callTimeoutMs: MS, onAudit })
         .render(settled("aware", 'marzi.call("probe.aware")'), slot, { id: "wid" });
+    },
+
+    // A handler that answers inside its abort listener. That answer is first.
+    "direct-resolve"() {
+      const direct = { name: "probe.direct", description: "answers in the abort listener",
+        handler: (p, { signal }) => new Promise((resolve) => signal.addEventListener("abort", () => resolve({ partial: true }))) };
+      createRuntime({ capabilities: [report, direct], callTimeoutMs: MS, onAudit })
+        .render(settled("direct", 'marzi.call("probe.direct")'), slot, { id: "wid" });
+    },
+
+    // A handler that rejects inside its abort listener. That failure is first.
+    "direct-reject"() {
+      const direct = { name: "probe.direct", description: "rejects in the abort listener",
+        handler: (p, { signal }) => new Promise((_, reject) => signal.addEventListener("abort", () => reject(new Error("stopped")))) };
+      createRuntime({ capabilities: [report, direct], callTimeoutMs: MS, onAudit })
+        .render(settled("direct", 'marzi.call("probe.direct")'), slot, { id: "wid" });
+    },
+
+    // A store that never answers stops at the deadline, as a handler does.
+    "store-deadline"() {
+      createRuntime({ capabilities: [report], store: hangingStore, callTimeoutMs: MS, onAudit })
+        .render(settled("load", "marzi.loadState()") + settled("save", "marzi.saveState({ n: 1 })"), slot, { id: "wid" });
+    },
+
+    // As "abort-aware", for a store.
+    "store-abort-aware"() {
+      createRuntime({ capabilities: [report], store: lateStore, callTimeoutMs: MS, onAudit })
+        .render(settled("load", "marzi.loadState()"), slot, { id: "wid" });
     },
 
     // A second call gets its own full deadline.
@@ -176,7 +213,9 @@
         signal.addEventListener = (type, fn, options) => {
           const counting = (e) => { reached.count += 1; fn(e); };
           wrapped.set(fn, counting);
-          add(type, counting, options);
+          // The options are dropped on purpose. zone.js before 0.14.3 does not
+          // honour them for a later add, so a listener must go by name.
+          add(type, counting);
         };
         signal.removeEventListener = (type, fn, options) => remove(type, wrapped.get(fn) ?? fn, options);
         return { parent, reached };

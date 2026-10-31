@@ -43,7 +43,7 @@ export function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<
  *
  * It does the work of `AbortSignal.any([parent, AbortSignal.timeout(ms)])`.
  * Those two functions are newer than all else that marzi needs. Safari got `any`
- * only in 17.4, and Chrome's `timeout` gave the wrong error before 124.
+ * only in 17.4, and `timeout` only in 16.
  *
  * The first to happen removes the other, because a widget can live for a long
  * time and make many calls. The deadline removes its listener by name. The
