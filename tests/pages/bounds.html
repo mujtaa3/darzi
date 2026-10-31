@@ -1,0 +1,73 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>bounds</title></head>
+<body>
+<div id="slot"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+  const query = new URLSearchParams(location.search);
+  const probe = query.get("probe");
+
+  // A heartbeat on the host page: a loop of tasks on its own channel. The
+  // largest gap between two beats is how long the host's main thread was
+  // blocked. It only measures; no test waits on it.
+  let last = performance.now(), maxGap = 0, beating = true;
+  const hb = new MessageChannel();
+  hb.port1.onmessage = () => {
+    const now = performance.now();
+    if (now - last > maxGap) maxGap = now - last;
+    last = now;
+    if (beating) hb.port2.postMessage(0);
+  };
+  hb.port2.postMessage(0);
+
+  // What arrived at a handler, without walking it (a sparse array must not
+  // be iterated here, or the page would measure itself).
+  function shape(v) {
+    if (Array.isArray(v)) return { kind: "array", length: v.length };
+    return { kind: typeof v };
+  }
+
+  createRuntime({
+    capabilities: [
+      { name: "probe.echo", description: "reports the shape of params.v",
+        handler: (p) => { log("HANDLER " + JSON.stringify(shape(p && p.v))); return true; } },
+      { name: "probe.mark", description: "logs a step and the largest heartbeat gap since the last mark",
+        handler: (p) => {
+          log(`MARK ${p.step} gap=${Math.round(maxGap)}ms`);
+          maxGap = 0; last = performance.now();
+          if (p.step === "done") beating = false;
+          return true;
+        } },
+    ],
+    onAudit: (e) => log(`AUDIT ${e.decision} len=${e.method.length} method=${e.method.slice(0, 32)} reason=${e.reason ?? ""}`),
+  }).render(`<script>
+    var probe = ${JSON.stringify(probe)};
+    // Each step: [label, method, a function that builds params]. The control
+    // comes first in each list: a value that the switchboard refuses today.
+    var STEPS = {
+      sparse: [
+        ["control-packed", "probe.echo", function () { return { v: new Array(10001).fill(0) }; }],
+        ["sparse", "probe.echo", function () { return { v: new Array(100000000) }; }]
+      ]
+    };
+    function run(i) {
+      var s = STEPS[probe][i];
+      if (!s) { marzi.call("probe.mark", { step: "done" }); return; }
+      marzi.call("probe.mark", { step: s[0] + ":start" })
+        .then(function () {
+          // A value that the engine cannot build is reported, so the steps go on.
+          var params;
+          try { params = s[2](); } catch (e) { return "build failed: " + e.name + " " + e.message; }
+          return marzi.call(s[1], params).then(
+            function () { return "ok"; },
+            function (e) { return "refused, reply length " + String(e.message).length; });
+        })
+        .then(function (outcome) { return marzi.call("probe.mark", { step: s[0] + ":end " + outcome }); })
+        .then(function () { run(i + 1); });
+    }
+    run(0);
+  <\/script>`, document.getElementById("slot"));
+</script>
+</body></html>

@@ -98,9 +98,11 @@ export function justCrossedRate(w: RateWindow, calls: number): boolean {
  * key, so they pass through unchanged: Date, RegExp and binary data. Their
  * byte sizes count against the text limit, so that an ArrayBuffer cannot be
  * the huge value that a string may not be. For a typed array, it counts the
- * view's bytes, not the whole buffer behind the view. It refuses every other
- * type, for example Map, Set or Error. Params are JSON-like data, plus dates
- * and binary data. A widget that needs more can encode it.
+ * view's bytes, not the whole buffer behind the view. An array longer than
+ * MAX_PARAM_NODES is refused before it is copied, because `map` visits every
+ * slot, also the empty ones that the node count never sees. It refuses every
+ * other type, for example Map, Set or Error. Params are JSON-like data, plus
+ * dates and binary data. A widget that needs more can encode it.
  *
  * The new objects keep the normal prototype. A null prototype would break
  * `params.hasOwnProperty(...)` in handler code, and it adds no protection
@@ -128,6 +130,11 @@ export function sanitizeParams(input: unknown): SanitizeResult {
     if (value === null || typeof value !== "object") return value;
 
     if (Array.isArray(value)) {
+      // `map` visits every slot up to `length`, also the empty ones, which the
+      // node count below never sees. A widget can make `new Array(1e8)` at no
+      // cost, so check the length first (tested: one such array blocked the
+      // host page for 0.2 to 2.4 s).
+      if (value.length > MAX_PARAM_NODES) throw new RangeError("too many values");
       // A copy by index also drops extra properties that are not indexes.
       return value.map((item) => walk(item, depth + 1));
     }
