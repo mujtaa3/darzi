@@ -38,6 +38,10 @@ const MUTATIONS = [
   { name: "frame-src-added", spec: "navigation", staysGreen: true, edits: [ADD_FRAME_SRC] },
   { name: "warden-rule-comes-last", spec: "navigation", edits: [ADD_FRAME_SRC,
     [JAIL, "`frame-src 'none'; ${WIDGET_CSP}`", "`${WIDGET_CSP}; frame-src 'none'`"]] },
+  { name: "no-default-src-for-other-loads", spec: "loads", edits: [
+    [JAIL, `"default-src 'none'", // block everything, then allow back only what is needed`, ""]] },
+  { name: "connect-src-opened", spec: "loads", edits: [
+    [JAIL, `"form-action 'none'", // a form submit is a navigation, so it can carry data out`, `"form-action 'none'",\n  "connect-src *",`]] },
   { name: "knock-from-any-window", spec: "handshake", edits: [
     [RUNTIME, "if (inner === undefined || event.source !== inner) return;", "if (inner === undefined) return;"]] },
   { name: "no-knock-limit", spec: "reconnect", edits: [

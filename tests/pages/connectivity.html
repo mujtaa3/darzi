@@ -7,6 +7,8 @@
   window.__log = [];
   const log = (s) => window.__log.push(s);
   const WITNESS = "http://127.0.0.1:9999/witness";
+  // The host page's own origin. tests/server.js counts these requests.
+  const LOCAL = location.origin + "/witness-local";
 
   // Every way we probe for a document to make a request, labelled
   // `<side>-<probe>`, with the CSP directive that decides each one. This one
@@ -39,6 +41,7 @@
   });
   runtime.render(`<script>
     (${probe})(${JSON.stringify(WITNESS)}, "widget");
+    (${probe})(${JSON.stringify(LOCAL)}, "widget-host");
     setTimeout(function () { marzi.call("probe.report", {}); }, 200);
   <\/script>`, document.getElementById("slot"));
 
@@ -47,7 +50,10 @@
   // explicit <body> matters: a script parsed before it would find
   // document.body null, and the probes that insert an element would throw.
   const control = document.createElement("iframe");
-  control.srcdoc = `<body><script>(${probe})(${JSON.stringify(WITNESS)}, "control");<\/script></body>`;
+  control.srcdoc = `<body><script>
+    (${probe})(${JSON.stringify(WITNESS)}, "control");
+    (${probe})(${JSON.stringify(LOCAL)}, "control-host");
+  <\/script></body>`;
   document.getElementById("control").appendChild(control);
 </script>
 </body></html>
