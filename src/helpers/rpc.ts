@@ -96,14 +96,15 @@ export function justCrossedRate(w: RateWindow, calls: number): boolean {
  *
  * It builds new plain objects and arrays. Some types cannot carry a prototype
  * key, so they pass through unchanged: Date, RegExp and binary data. Their
- * byte sizes count against the text limit, so that an ArrayBuffer cannot be
- * the huge value that a string may not be. A typed array or DataView counts
- * the WHOLE buffer behind the view, because the structured clone copies the
- * whole buffer. A view over a SharedArrayBuffer is refused. An array longer
- * than MAX_PARAM_NODES is refused before it is copied, because `map` visits
- * every slot, also the empty ones that the node count never sees. It refuses
- * every other type, for example Map, Set or Error. Params are JSON-like data,
- * plus dates and binary data. A widget that needs more can encode it.
+ * sizes count against the text limit, so that none of them can be the huge
+ * value that a string may not be: a RegExp counts its source and flags, an
+ * ArrayBuffer its bytes, and a typed array or DataView the WHOLE buffer behind
+ * the view, because the structured clone copies the whole buffer. A view over
+ * a SharedArrayBuffer is refused. An array longer than MAX_PARAM_NODES is
+ * refused before it is copied, because `map` visits every slot, also the
+ * empty ones that the node count never sees. It refuses every other type, for
+ * example Map, Set or Error. Params are JSON-like data, plus dates and binary
+ * data. A widget that needs more can encode it.
  *
  * The new objects keep the normal prototype. A null prototype would break
  * `params.hasOwnProperty(...)` in handler code, and it adds no protection
@@ -151,7 +152,12 @@ export function sanitizeParams(input: unknown): SanitizeResult {
       return clean;
     }
 
-    if (value instanceof Date || value instanceof RegExp) return value;
+    if (value instanceof Date) return value;
+    if (value instanceof RegExp) {
+      // The source is text that a handler may store or run, so it counts.
+      budget(value.source.length + value.flags.length);
+      return value;
+    }
     if (value instanceof ArrayBuffer) {
       budget(value.byteLength);
       return value;

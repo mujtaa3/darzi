@@ -8,6 +8,10 @@
   const log = (s) => window.__log.push(s);
   const query = new URLSearchParams(location.search);
   const probe = query.get("probe");
+  // The RegExp source length: over the 1 000 000 params budget, and under
+  // WebKit's pattern cap. WebKit refuses a pattern of 1 100 000 characters
+  // with "regular expression too large".
+  const reLength = Number(query.get("n") || 1040000);
 
   // A heartbeat on the host page: a loop of tasks on its own channel. The
   // largest gap between two beats is how long the host's main thread was
@@ -28,6 +32,8 @@
     if (Array.isArray(v)) return { kind: "array", length: v.length };
     if (ArrayBuffer.isView(v)) return { kind: "view", bytes: v.byteLength, bufferBytes: v.buffer.byteLength };
     if (v instanceof ArrayBuffer) return { kind: "buffer", bytes: v.byteLength };
+    if (v instanceof RegExp) return { kind: "regexp", sourceLength: v.source.length };
+    if (typeof v === "string") return { kind: "string", length: v.length };
     return { kind: typeof v };
   }
 
@@ -46,6 +52,7 @@
     onAudit: (e) => log(`AUDIT ${e.decision} len=${e.method.length} method=${e.method.slice(0, 32)} reason=${e.reason ?? ""}`),
   }).render(`<script>
     var probe = ${JSON.stringify(probe)};
+    var RE_LENGTH = ${reLength};
     // Each step: [label, method, a function that builds params]. The control
     // comes first in each list: a value that the switchboard refuses today.
     var STEPS = {
@@ -56,6 +63,10 @@
       view: [
         ["control-buffer", "probe.echo", function () { return { v: new ArrayBuffer(50000000) }; }],
         ["view", "probe.echo", function () { return { v: new Uint8Array(new ArrayBuffer(50000000), 0, 1) }; }]
+      ],
+      regexp: [
+        ["control-string", "probe.echo", function () { return { v: "b".repeat(1100000) }; }],
+        ["regexp", "probe.echo", function () { return { v: new RegExp("b".repeat(RE_LENGTH)) }; }]
       ]
     };
     function run(i) {
