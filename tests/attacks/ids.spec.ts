@@ -24,6 +24,11 @@ test("duplicate ids, names and bad number options are refused; destroy releases 
   expect(threw("dup-library")).toContain('library "lib" is registered twice');
   expect(ok).toContain("distinct-names");
 
+  // The reserved prefix, with look-alike names as the control.
+  expect(threw("reserved-prefix")).toContain('capability name "marzi/loadState" uses the reserved "marzi/" prefix');
+  expect(threw("reserved-prefix-new")).toContain('capability name "marzi/anything" uses the reserved "marzi/" prefix');
+  expect(ok).toContain("prefix-lookalike");
+
   // Number options: not a whole number, out of range, or missing.
   for (const [label, option] of [
     ["timeout-infinity", "callTimeoutMs"],

@@ -9,14 +9,15 @@
   const waiters = {};
   const waitFor = (tag) => new Promise((r) => (waiters[tag] = r));
 
-  const runtime = createRuntime({
+  const options = {
     capabilities: [{ name: "probe.report", description: "checkpoint",
       handler: (p) => { log("REPORT " + JSON.stringify(p)); waiters[p.tag]?.(p); return true; } }],
-    store: memoryStore(),
     onAudit: (e) => log(`AUDIT ${e.method} ${e.decision}${e.reason ? " · " + e.reason : ""}`),
-  });
+  };
+  const runtime = createRuntime({ ...options, store: memoryStore() });
   const slot = document.getElementById("slot");
-  const run = (body, id) => runtime.render(`<script>(async () => {${body}})();<\/script>`, slot, { id });
+  const runOn = (rt, body, id) => rt.render(`<script>(async () => {${body}})();<\/script>`, slot, { id });
+  const run = (body, id) => runOn(runtime, body, id);
 
   // Save under A, with an OWN __proto__ key (from JSON.parse, since an object
   // literal would set the prototype instead of creating a key).
@@ -50,6 +51,28 @@
     try { await marzi.saveState({ s: "\u20ac".repeat(20000) }); await marzi.call("probe.report", { tag: "euro-under", saved: true }); }
     catch (e) { await marzi.call("probe.report", { tag: "euro-under", err: e.message }); }`, "wid-E");
   await waitFor("euro-under"); w.destroy();
+
+  // The option sets the limit, in both directions. A JSON string has two quotes,
+  // so 198 "x" are exactly 200 bytes. The default limit would refuse the large save.
+  const tiny = createRuntime({ ...options, store: memoryStore(), stateLimitBytes: 200 });
+  w = runOn(tiny, `
+    await marzi.saveState("x".repeat(198)); await marzi.call("probe.report", { tag: "at-limit", saved: true });
+    try { await marzi.saveState("x".repeat(199)); await marzi.call("probe.report", { tag: "over-limit", saved: true }); }
+    catch (e) { await marzi.call("probe.report", { tag: "over-limit", err: e.message }); }`, "wid-tiny");
+  await waitFor("over-limit"); w.destroy();
+  const large = createRuntime({ ...options, store: memoryStore(), stateLimitBytes: 200000 });
+  w = runOn(large, `
+    await marzi.saveState({ big: "x".repeat(100000) }); await marzi.call("probe.report", { tag: "large-limit", saved: true });`, "wid-large");
+  await waitFor("large-limit"); w.destroy();
+
+  // With no store, state calls are refused. They must not seem to work.
+  const noStore = createRuntime(options);
+  w = runOn(noStore, `
+    try { await marzi.saveState({ n: 1 }); await marzi.call("probe.report", { tag: "no-store-save", saved: true }); }
+    catch (e) { await marzi.call("probe.report", { tag: "no-store-save", err: e.message }); }
+    try { await marzi.loadState(); await marzi.call("probe.report", { tag: "no-store-load", loaded: true }); }
+    catch (e) { await marzi.call("probe.report", { tag: "no-store-load", err: e.message }); }`, "wid-none");
+  await waitFor("no-store-load"); w.destroy();
   log("DONE");
 </script>
 </body></html>

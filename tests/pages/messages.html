@@ -15,6 +15,7 @@
         // Three ways a prototype key could do harm: as an own key the handler
         // trips over, as a rewritten prototype on the params object itself, or
         // as pollution of Object.prototype for the whole page.
+        if (p && p.tag === "junk-replies") log("JUNK-REPLIES " + p.replies);
         log(`REPORT ${JSON.stringify({ tag: p && p.tag, own,
           protoIntact: Object.getPrototypeOf(p) === Object.prototype && p.polluted === undefined,
           polluted: ({}).polluted !== undefined })}`);
@@ -23,6 +24,26 @@
     }],
     onAudit: (e) => log(`AUDIT ${e.method} ${e.decision}${e.reason ? " · " + e.reason : ""}`),
   });
+
+  // A second widget sends messages that are not requests. Each one must get no
+  // reply. It counts the replies on its raw port: after the last junk message,
+  // one valid call has its reply, and any other reply came from the junk.
+  runtime.render(`<script>
+    var raw = null, replies = 0;
+    window.addEventListener("message", function (e) {
+      if (e.ports && e.ports[0]) { raw = e.ports[0]; raw.addEventListener("message", function () { replies += 1; }); }
+    });
+    marzi.call("probe.echo", { tag: "junk-control" }).then(function () {
+      var before = replies;
+      [42, "hello", null, [], { jsonrpc: "1.0", id: 1, method: "probe.echo" }, { jsonrpc: "2.0", id: {}, method: "probe.echo" },
+       { jsonrpc: "2.0", id: true, method: "probe.echo" }, { jsonrpc: "2.0", id: 2, method: 5 }, { jsonrpc: "2.0", id: 3 }
+      ].forEach(function (junk) { raw.postMessage(junk); });
+      return marzi.call("probe.echo", { tag: "junk-after" }).then(function () {
+        return marzi.call("probe.echo", { tag: "junk-replies", replies: replies - before - 1 });
+      });
+    });
+  <\/script>`, document.getElementById("slot"));
+  // The first widget's calls come after this one's, because a rate limit is per widget.
 
   // The widget speaks on the raw port so it can send exactly the bytes it
   // wants. Each message probes one boundary check; the flood comes last

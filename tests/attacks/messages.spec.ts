@@ -36,3 +36,15 @@ test("params are rebuilt, bounded, and rate-limited at the boundary", async ({ p
   expect(audits.filter((a) => a.startsWith("(rate limit)")).length).toBe(1);
   expect(echoes.filter((e) => e.tag === "flood").length).toBe(115);
 });
+
+test("a message that is not a request gets no reply, and the audit records it", async ({ page }) => {
+  const attack = await openAttack(page, "messages");
+  await attack.untilLog("JUNK-REPLIES ");
+
+  // Nine junk messages, one audit line each, and no reply to any.
+  expect(await attack.logged("JUNK-REPLIES ")).toEqual(["0"]);
+  const audits = await attack.logged("AUDIT ");
+  expect(audits.filter((a) => a === "(unparseable) refused · malformed message"), "audit lines").toHaveLength(9);
+  // Control: the channel still works after them.
+  expect((await attack.reports()).map((r) => r.tag)).toContain("junk-after");
+});

@@ -20,6 +20,12 @@
   attempt("distinct-names", () => createRuntime({ capabilities: [cap("a.read"), cap("b.read")],
     libraries: [{ name: "x", source: "1" }, { name: "y", source: "2" }] }));
 
+  // Setup: the "marzi/" prefix belongs to the runtime's own methods. A capability
+  // with such a name must not take the place of `marzi/saveState`.
+  attempt("reserved-prefix", () => createRuntime({ capabilities: [cap("marzi/loadState")] }));
+  attempt("reserved-prefix-new", () => createRuntime({ capabilities: [cap("marzi/anything")] }));
+  attempt("prefix-lookalike", () => createRuntime({ capabilities: [cap("marzi.loadState"), cap("marzix/loadState")] }));
+
   // Setup: a number option must be a whole number in its range. A bad one
   // would show only later, inside a widget, so it is refused at once.
   attempt("timeout-infinity", () => createRuntime({ capabilities: [], callTimeoutMs: Infinity }));

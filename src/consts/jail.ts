@@ -80,7 +80,8 @@ export const WARDEN_BASE_URL = "about:srcdoc";
  * This is a backstop with an uncertain effect. The attribute controls the
  * frame's own load, and a `srcdoc` frame loads nothing from the network. The
  * main protection is the warden, which stops the widget from navigating
- * itself. No test checks this setting.
+ * itself. `frame-settings.spec.ts` checks the attribute, and that a widget's
+ * `document.referrer` is empty.
  *
  * MDN: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Referrer-Policy
  */

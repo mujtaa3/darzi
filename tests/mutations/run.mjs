@@ -50,6 +50,14 @@ const MUTATIONS = [
   // token alone changes nothing (tested: one frame with the token does download).
   { name: "sandbox-allows-downloads", spec: "escapes", staysGreen: true, edits: [SANDBOX_ADDS("allow-downloads")] },
   { name: "sandbox-allows-modals", spec: "escapes", edits: [SANDBOX_ADDS("allow-modals")] },
+  { name: "frame-allows-geolocation", spec: "frame-settings", edits: [[JAIL, `FRAME_ALLOW = "";`, `FRAME_ALLOW = "geolocation *";`]] },
+  { name: "referrer-policy-opened", spec: "frame-settings", edits: [[JAIL, `FRAME_REFERRER_POLICY = "no-referrer";`, `FRAME_REFERRER_POLICY = "unsafe-url";`]] },
+  { name: "prefix-not-reserved", spec: "ids", edits: [[RUNTIME, `if (capability.name.startsWith("marzi/")) {`, `if (capability.name === "marzi/") {`]] },
+  { name: "no-store-seems-to-work", spec: "attacks/state", edits: [[RUNTIME, `if (!options.store) return refuse("no store configured");`, "if (!options.store) return ok(id, null);"]] },
+  { name: "state-limit-ignored", spec: "attacks/state", edits: [
+    [RUNTIME, "const stateLimit = options.stateLimitBytes ?? DEFAULT_STATE_LIMIT_BYTES;", "const stateLimit = DEFAULT_STATE_LIMIT_BYTES;"]] },
+  { name: "malformed-not-audited", spec: "messages", edits: [
+    [RUNTIME, `      audit({\n        widgetId: widget.id,\n        method: "(unparseable)",\n        decision: "refused",\n        reason: "malformed message",\n      });\n`, ""]] },
   { name: "knock-from-any-window", spec: "handshake", edits: [
     [RUNTIME, "if (inner === undefined || event.source !== inner) return;", "if (inner === undefined) return;"]] },
   { name: "no-knock-limit", spec: "reconnect", edits: [
@@ -87,7 +95,7 @@ function run(edits, specs, flags = []) {
       if (text.split(find).length !== 2) throw new Error(`${file}: this text must appear exactly once: ${find}`);
       writeFileSync(join(dir, file), text.replace(find, () => replace));
     }
-    const filters = specs.map((spec) => `attacks/${spec}.spec`);
+    const filters = specs.map((spec) => `${spec.startsWith("attacks/") ? spec : `attacks/${spec}`}.spec`);
     const { stdout } = spawnSync("npx", ["playwright", "test", "-c", "tests/playwright.config.ts", "--reporter=json", ...flags, ...filters],
       { cwd: dir, encoding: "utf8", maxBuffer: 2 ** 30 });
     return summarize(JSON.parse(stdout));

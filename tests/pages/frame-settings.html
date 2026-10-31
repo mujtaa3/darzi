@@ -1,0 +1,35 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>frame settings</title></head>
+<body>
+<div id="slot"></div><div id="control"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+
+  // One script for the widget and the control: what can this document learn?
+  const probe = (report) => `
+    function done(geolocation) { var out = { referrer: document.referrer, geolocation: geolocation }; ${report}; }
+    navigator.geolocation.getCurrentPosition(
+      function () { done("allowed"); },
+      function (e) { done("refused " + e.code); },
+      { timeout: 3000 });`;
+
+  const widget = createRuntime({
+    capabilities: [{ name: "probe.report", description: "result", handler: (p) => { log("WIDGET " + JSON.stringify(p)); return true; } }],
+  }).render(`<script>${probe('marzi.call("probe.report", out)')}<\/script>`, document.getElementById("slot"), { id: "w" });
+
+  const attrs = (f) => ({ allow: f.getAttribute("allow"), referrerpolicy: f.getAttribute("referrerpolicy"), sandbox: f.getAttribute("sandbox") });
+  // The outer frame is on this page. The host wrote the inner frame's tag, in the
+  // outer frame's `srcdoc`, so it can read it there.
+  const inner = new DOMParser().parseFromString(widget.frame.srcdoc, "text/html").querySelector("iframe");
+  log("ATTRS " + JSON.stringify({ outer: attrs(widget.frame), inner: attrs(inner) }));
+
+  // Control: a frame with no sandbox, that the host lets use the feature.
+  window.addEventListener("message", (e) => { if (e.data && e.data.control) log("CONTROL " + JSON.stringify(e.data.control)); });
+  const control = document.createElement("iframe");
+  control.setAttribute("allow", "geolocation");
+  control.srcdoc = `<script>${probe('parent.postMessage({ control: out }, "*")')}<\/script>`;
+  document.getElementById("control").appendChild(control);
+</script>
+</body></html>
