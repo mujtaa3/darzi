@@ -29,6 +29,8 @@ const HELPERS = "src/helpers/runtime.ts";
 const ADD_FRAME_SRC = [JAIL, `"form-action 'none'", // a form submit is a navigation, so it can carry data out`,
   `"form-action 'none'",\n  "frame-src *",`];
 
+const SANDBOX_ADDS = (token) => [JAIL, `SANDBOX_TOKENS = "allow-scripts";`, `SANDBOX_TOKENS = "allow-scripts ${token}";`];
+
 const MUTATIONS = [
   { name: "sandbox-allows-same-origin", spec: "identity", edits: [
     [JAIL, `SANDBOX_TOKENS = "allow-scripts";`, `SANDBOX_TOKENS = "allow-scripts allow-same-origin";`]] },
@@ -42,6 +44,12 @@ const MUTATIONS = [
     [JAIL, `"default-src 'none'", // block everything, then allow back only what is needed`, ""]] },
   { name: "connect-src-opened", spec: "loads", edits: [
     [JAIL, `"form-action 'none'", // a form submit is a navigation, so it can carry data out`, `"form-action 'none'",\n  "connect-src *",`]] },
+  { name: "sandbox-allows-popups", spec: "escapes", edits: [SANDBOX_ADDS("allow-popups")] },
+  { name: "sandbox-allows-top-navigation", spec: "escapes", edits: [SANDBOX_ADDS("allow-top-navigation")] },
+  // Green on purpose: the warden's `frame-src 'none'` also stops a download, so this
+  // token alone changes nothing (tested: one frame with the token does download).
+  { name: "sandbox-allows-downloads", spec: "escapes", staysGreen: true, edits: [SANDBOX_ADDS("allow-downloads")] },
+  { name: "sandbox-allows-modals", spec: "escapes", edits: [SANDBOX_ADDS("allow-modals")] },
   { name: "knock-from-any-window", spec: "handshake", edits: [
     [RUNTIME, "if (inner === undefined || event.source !== inner) return;", "if (inner === undefined) return;"]] },
   { name: "no-knock-limit", spec: "reconnect", edits: [

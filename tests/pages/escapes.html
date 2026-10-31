@@ -1,0 +1,87 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>escapes</title></head>
+<body>
+<div id="victim"></div><div id="slot"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+  const WITNESS = "http://127.0.0.1:9999/witness";
+  const control = new URLSearchParams(location.search).get("control");
+
+  // Each way that a document can open or navigate another document, start a
+  // download, or show a dialog. navigation.html has a frame that navigates ITSELF.
+  // `top.frames[0]` is the victim, a separate document on this page.
+  const MOVES = {
+    "window-open": `window.open(via("window-open"));`,
+    "anchor-blank": `link({ target: "_blank", href: via("anchor-blank") });`,
+    "anchor-top": `link({ target: "_top", href: via("anchor-top") });`,
+    "anchor-parent": `link({ target: "_parent", href: via("anchor-parent") });`,
+    "top-assign": `top.location.href = via("top-assign");`,
+    "top-replace": `top.location.replace(via("top-replace"));`,
+    "parent-assign": `parent.location.href = via("parent-assign");`,
+    "parent-replace": `parent.location.replace(via("parent-replace"));`,
+    "victim-frame": `top.frames[0].location.replace(via("victim-frame"));`,
+    "victim-inner": `top.frames[0].frames[0].location.replace(via("victim-inner"));`,
+    "nested-self": `nested("location.href = " + JSON.stringify(via("nested-self")));`,
+    "nested-parent": `nested("parent.location.href = " + JSON.stringify(via("nested-parent")));`,
+    "download": `link({ download: SIDE + ".txt", href: "data:text/plain,x" });`,
+    "alert": `alert(SIDE);`,
+    "confirm": `confirm(SIDE);`,
+  };
+  const PRELUDE = (side) => `
+    var SIDE = ${JSON.stringify(side)};
+    function via(name) { return ${JSON.stringify(WITNESS)} + "?via=" + SIDE + "-" + name; }
+    function nested(code) {
+      var f = document.createElement("iframe");
+      f.setAttribute("srcdoc", "<script>" + code + "<\\/script>");
+      document.body.appendChild(f);
+    }
+    function link(attrs) {
+      var a = document.createElement("a");
+      a.textContent = "x";
+      for (var k in attrs) a.setAttribute(k, attrs[k]);
+      document.body.appendChild(a);
+      a.click();
+    }`;
+  // A refresh written in the HTML, so that no script runs it.
+  const metaRefresh = (side) => `<meta http-equiv="refresh" content="0;url=${WITNESS}?via=${side}-meta-static">`;
+
+  if (control) {
+    // Control: one move, from a frame with no sandbox and no CSP. It gets its own
+    // page, because some moves replace the page. The victim has a child frame, as
+    // a widget's warden does.
+    const victim = document.createElement("iframe");
+    victim.srcdoc = `<iframe srcdoc="<p>inner</p>"></iframe>`;
+    document.getElementById("victim").appendChild(victim);
+    victim.onload = () => {
+      const f = document.createElement("iframe");
+      f.srcdoc = control === "meta-static"
+        ? metaRefresh("control")
+        : `<body><script>${PRELUDE("control")} ${MOVES[control]}<\/script></body>`;
+      document.getElementById("slot").appendChild(f);
+      log("CONTROL-READY");
+    };
+  } else {
+    const runtime = createRuntime({
+      capabilities: [{ name: "probe.report", description: "checkpoint", handler: (p) => { log(String(p.at)); return true; } }],
+      onWidgetFault: (f) => log("FAULT " + f.kind + " " + f.widgetId),
+    });
+    // The victim: a widget that the others try to navigate.
+    runtime.render(`<script>
+      marzi.call("probe.report", { at: "victim-started" });
+      setTimeout(function () { marzi.call("probe.report", { at: "victim-alive" }); }, 1500);
+    <\/script>`, document.getElementById("victim"), { id: "victim" });
+    // One widget for each move, because a move may end its own document.
+    for (const [name, move] of Object.entries(MOVES)) {
+      runtime.render(`<script>${PRELUDE("widget")}
+        marzi.call("probe.report", { at: "start:${name}" }).then(function () {
+          try { ${move} } catch (e) { marzi.call("probe.report", { at: "threw:${name}:" + e.name }); }
+        });
+      <\/script>`, document.getElementById("slot"), { id: name });
+    }
+    runtime.render(`<script>marzi.call("probe.report", { at: "start:meta-static" });<\/script>${metaRefresh("widget")}`,
+      document.getElementById("slot"), { id: "meta-static" });
+  }
+</script>
+</body></html>
