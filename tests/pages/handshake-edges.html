@@ -1,0 +1,130 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>handshake edges</title></head>
+<body>
+<div id="slot"></div>
+<script type="module">
+  import { createRuntime, memoryStore } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+  const slot = document.getElementById("slot");
+  const onAudit = (e) => log(`AUDIT ${e.widgetId} ${e.method} ${e.decision}${e.reason ? " · " + e.reason : ""}`);
+  const onWidgetFault = (f) => log(`FAULT ${f.widgetId} ${f.kind}`);
+  const reporting = (extra) => ({ name: "probe.report", description: "checkpoint",
+    handler: (p) => { log("REPORT " + JSON.stringify(p)); if (extra) extra(p); return true; } });
+  const addSibling = (script) => {
+    const f = document.createElement("iframe");
+    f.setAttribute("sandbox", "allow-scripts");
+    f.srcdoc = `<script>${script}<\/script>`;
+    slot.appendChild(f);
+    return f;
+  };
+  window.addEventListener("message", (e) => { if (e.data && e.data.sibling) log("SIBLING " + e.data.sibling); });
+
+  const SCENARIOS = {
+    // Another frame floods the host with window messages during a handshake.
+    flood() {
+      addSibling(`
+        addEventListener("message", function (e) { if (e.ports && e.ports[0]) parent.postMessage({ sibling: "got-a-port" }, "*"); });
+        for (var i = 0; i < 5000; i++) { parent.postMessage({ marzi: "ready" }, "*"); parent.postMessage({ junk: i }, "*"); }
+        parent.postMessage({ sibling: "flooded" }, "*");`);
+      createRuntime({ capabilities: [reporting()], onAudit, onWidgetFault })
+        .render(`<script>marzi.call("probe.report", { tag: "connected" });<\/script>`, slot, { id: "target" });
+    },
+
+    // A frame nested inside a widget knocks at the host, and counts its ports.
+    "nested-knock"() {
+      let victim;
+      const rt = createRuntime({ capabilities: [reporting((p) => {
+        // The victim's channel must outlive the nested knock.
+        if (p.tag === "nested-ports") victim.frame.contentWindow.frames[0].postMessage({ go: 1 }, "*");
+      })], onAudit, onWidgetFault });
+      victim = rt.render(`<script>
+        addEventListener("message", function (e) { if (e.data && e.data.go) marzi.call("probe.report", { tag: "victim-after" }); });
+        marzi.call("probe.report", { tag: "victim-before" });
+      <\/script>`, slot, { id: "victim" });
+      rt.render(`<script>
+        addEventListener("message", function (e) {
+          if (e.data && typeof e.data.nested === "number") marzi.call("probe.report", { tag: "nested-ports", n: e.data.nested });
+        });
+        var f = document.createElement("iframe");
+        f.setAttribute("srcdoc", '<script>var got = 0; addEventListener("message", function (e) { if (e.ports && e.ports.length) got++; });' +
+          'top.postMessage({ marzi: "ready" }, "*"); top.postMessage({ marzi: "ready" }, "*");' +
+          'setTimeout(function () { parent.postMessage({ nested: got }, "*"); }, 300);<\\/script>');
+        document.body.appendChild(f);
+      <\/script>`, slot, { id: "knocker" });
+    },
+
+    // Destroy before the frame has connected: no port, no fault, and the id is free.
+    "destroy-early"() {
+      const rt = createRuntime({ capabilities: [reporting()], startTimeoutMs: 300, onAudit, onWidgetFault });
+      rt.render("<p>x</p>", slot, { id: "doomed" }).destroy();
+      rt.render(`<script>marzi.call("probe.report", { tag: "same-id" });<\/script>`, slot, { id: "doomed" });
+      setTimeout(() => log("PAST-START-TIMEOUT"), 800);
+    },
+
+    // A widget lends its port to another widget, and is then destroyed. Its id is
+    // rendered again. The lent port must be dead, and must not reach the new widget.
+    "lent-port"() {
+      let helper, owner;
+      const rt = createRuntime({ capabilities: [reporting((p) => {
+        if (p.tag === "lent-before") {
+          owner.destroy();
+          log("DESTROYED owner");
+          rt.render(`<script>marzi.call("probe.report", { tag: "new-owner" });<\/script>`, slot, { id: "owner" });
+        }
+        if (p.tag === "new-owner") helper.frame.contentWindow.frames[0].postMessage({ sendAgain: 1 }, "*");
+      })], onAudit, onWidgetFault });
+      helper = rt.render(`<script>
+        var lent = null;
+        function send(tag) { lent.postMessage({ jsonrpc: "2.0", id: Math.random(), method: "probe.report", params: { tag: tag } }); }
+        addEventListener("message", function (e) {
+          if (e.data && e.data.lend) { lent = e.ports[0]; send("lent-before"); }
+          if (e.data && e.data.sendAgain) { send("lent-after"); marzi.call("probe.report", { tag: "helper-sent" }); }
+        });
+        marzi.call("probe.report", { tag: "helper-ready" });
+      <\/script>`, slot, { id: "helper" });
+      owner = rt.render(`<script>
+        var raw = null;
+        addEventListener("message", function (e) { if (e.ports && e.ports[0]) raw = e.ports[0]; });
+        marzi.call("probe.report", { tag: "owner-ready" }).then(function () {
+          top.frames[0].frames[0].postMessage({ lend: 1 }, "*", [raw]);
+        });
+      <\/script>`, slot, { id: "owner" });
+    },
+
+    // A widget names another live widget in each place that it can write. The host
+    // takes the identity from the port, on calls, on refusals and on state.
+    "claimed-id"() {
+      const inner = memoryStore();
+      const store = { getState: inner.getState, putState: (id, json, signal) => { log("PUT " + id); return inner.putState(id, json, signal); } };
+      const rt = createRuntime({ capabilities: [reporting()], store, onAudit, onWidgetFault });
+      rt.render(`<script>marzi.call("probe.report", { tag: "other-ready" });<\/script>`, slot, { id: "other" });
+      rt.render(`<script>
+        var raw = null;
+        addEventListener("message", function (e) { if (e.ports && e.ports[0]) raw = e.ports[0]; });
+        marzi.call("probe.report", { tag: "claimer-ready" }).then(function () {
+          raw.postMessage({ jsonrpc: "2.0", id: 1, method: "probe.report", widgetId: "other", params: { tag: "claimed", widgetId: "other" } });
+          raw.postMessage({ jsonrpc: "2.0", id: 2, method: "no.such", widgetId: "other" });
+          raw.postMessage({ jsonrpc: "2.0", id: 3, method: "marzi/saveState", widgetId: "other", params: { value: { n: 1 }, widgetId: "other" } });
+          raw.postMessage({ jsonrpc: "2.0", id: 4, method: "probe.report", params: { tag: "claimer-done" } });
+        });
+      <\/script>`, slot, { id: "claimer" });
+    },
+
+    // A widget that never connects is reported after startTimeoutMs. Its frame never
+    // loads, because its container is not on the page. Another frame's knocks must
+    // not stop the timer. The two extra timers bracket it: a browser runs timers in
+    // due-time order at any load, so the test needs no clock.
+    "never-started"() {
+      const rt = createRuntime({ capabilities: [reporting()], startTimeoutMs: 500, onAudit, onWidgetFault });
+      rt.render("<p>orphan</p>", document.createElement("div"), { id: "orphan" });
+      rt.render(`<script>marzi.call("probe.report", { tag: "alive" });<\/script>`, slot, { id: "alive" });
+      setTimeout(() => log("BEFORE-THE-TIMEOUT"), 300);
+      setTimeout(() => log("AFTER-THE-TIMEOUT"), 800);
+      addSibling(`setInterval(function () { parent.postMessage({ marzi: "ready" }, "*"); }, 50);`);
+    },
+  };
+
+  SCENARIOS[new URLSearchParams(location.search).get("probe")]();
+</script>
+</body></html>

@@ -52,6 +52,12 @@ const MUTATIONS = [
   { name: "sandbox-allows-modals", spec: "escapes", edits: [SANDBOX_ADDS("allow-modals")] },
   { name: "frame-allows-geolocation", spec: "frame-settings", edits: [[JAIL, `FRAME_ALLOW = "";`, `FRAME_ALLOW = "geolocation *";`]] },
   { name: "referrer-policy-opened", spec: "frame-settings", edits: [[JAIL, `FRAME_REFERRER_POLICY = "no-referrer";`, `FRAME_REFERRER_POLICY = "unsafe-url";`]] },
+  { name: "no-never-started-fault", spec: "handshake-edges", edits: [
+    [RUNTIME, `reportFault({ widgetId: id, kind: "never-started", message: "widget did not complete its handshake" });`, ""]] },
+  { name: "start-timeout-ignored", spec: "handshake-edges", edits: [
+    [RUNTIME, "options.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS", "DEFAULT_START_TIMEOUT_MS"]] },
+  { name: "destroy-keeps-lent-port", spec: "handshake-edges", edits: [
+    [RUNTIME, `window.removeEventListener("message", onKnock);\n        closePort();`, `window.removeEventListener("message", onKnock);`]] },
   { name: "prefix-not-reserved", spec: "ids", edits: [[RUNTIME, `if (capability.name.startsWith("marzi/")) {`, `if (capability.name === "marzi/") {`]] },
   { name: "no-store-seems-to-work", spec: "attacks/state", edits: [[RUNTIME, `if (!options.store) return refuse("no store configured");`, "if (!options.store) return ok(id, null);"]] },
   { name: "state-limit-ignored", spec: "attacks/state", edits: [
