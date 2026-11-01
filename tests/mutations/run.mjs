@@ -68,6 +68,8 @@ const MUTATIONS = [
     [RUNTIME, `return id === null ? null : fail(id, RPC.INVALID_REQUEST, "method must be a string");`, "return null;"]] },
   { name: "flood-answers-only-requests", spec: "messages", edits: [
     [RUNTIME, "const floodedId = readId(raw);", "const floodedId = parseRequest(raw)?.id ?? null;"]] },
+  { name: "request-id-has-no-limit", spec: "messages", edits: [
+    ["src/helpers/rpc.ts", `typeof id === "string" && id.length <= MAX_ID_LENGTH ? id : null`, `typeof id === "string" ? id : null`]] },
   { name: "knock-from-any-window", spec: "handshake", edits: [
     [RUNTIME, "if (inner === undefined || event.source !== inner) return;", "if (inner === undefined) return;"]] },
   { name: "no-knock-limit", spec: "reconnect", edits: [

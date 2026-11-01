@@ -7,7 +7,10 @@
  * helpers/rpc.ts check it, because a widget can send any value at all.
  */
 
-/** The id of a request. The widget chooses it, and its reply has the same id. */
+/**
+ * The id of a request. The widget chooses it, and its reply has the same id. A
+ * string id has `MAX_ID_LENGTH` characters or fewer.
+ */
 export type RpcId = string | number;
 
 /** A request: the widget asks the host for something, and waits for a reply. */

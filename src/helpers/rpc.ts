@@ -8,7 +8,7 @@
  * reply. Spec: https://www.jsonrpc.org/specification
  */
 
-import { MAX_PARAM_DEPTH, MAX_PARAM_NODES, MAX_PARAM_TEXT, PROTOTYPE_KEYS } from "../consts/rpc.js";
+import { MAX_ID_LENGTH, MAX_PARAM_DEPTH, MAX_PARAM_NODES, MAX_PARAM_TEXT, PROTOTYPE_KEYS } from "../consts/rpc.js";
 import type { RateWindow, RpcId, RpcNotification, RpcRequest, RpcResponse, SanitizeResult } from "../types/rpc.js";
 
 /** Make a successful reply. */
@@ -23,7 +23,8 @@ export function fail(id: RpcId, code: number, message: string): RpcResponse {
 
 /**
  * Read the id of a message from a widget. Returns null if the message has no id
- * that a reply can carry.
+ * that a reply can carry: not a string or a number, or a string that is longer
+ * than `MAX_ID_LENGTH`.
  *
  * A message with a readable id gets a reply, even if another field is wrong. The
  * widget's promise then rejects at once, and does not wait for the stub's backstop.
@@ -35,7 +36,8 @@ export function readId(raw: unknown): RpcId | null {
   if (msg["jsonrpc"] !== "2.0") return null;
 
   const id = msg["id"];
-  return typeof id === "string" || typeof id === "number" ? id : null;
+  if (typeof id === "number") return id;
+  return typeof id === "string" && id.length <= MAX_ID_LENGTH ? id : null;
 }
 
 /**

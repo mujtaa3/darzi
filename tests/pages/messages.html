@@ -43,8 +43,10 @@
     marzi.call("probe.echo", { tag: "junk-control" }).then(function () {
       [42, "hello", null, [], { jsonrpc: "1.0", id: "old-version", method: "probe.echo" }, { jsonrpc: "2.0", id: {}, method: "probe.echo" },
        { jsonrpc: "2.0", id: true, method: "probe.echo" }, { jsonrpc: "2.0", method: 5 },
+       { jsonrpc: "2.0", id: "x".repeat(301), method: "probe.echo", params: { tag: "id-too-long" } },
        { jsonrpc: "2.0", id: "method-number", method: 5 }, { jsonrpc: "2.0", id: "method-missing" },
-       { jsonrpc: "2.0", id: "method-object", method: { name: "x" } }
+       { jsonrpc: "2.0", id: "method-object", method: { name: "x" } },
+       { jsonrpc: "2.0", id: "x".repeat(300), method: "probe.echo", params: { tag: "id-at-limit" } }
       ].forEach(function (junk) { raw.postMessage(junk); });
       // The same mistake through the stub. The promise must reject now, and not at the backstop.
       return marzi.call({ name: "x" }).then(function () { return "it resolved"; }, function (e) { return e.message; });
@@ -80,6 +82,7 @@
       });
       raw.postMessage({ jsonrpc: "2.0", id: "flooded-method-number", method: 5 });
       raw.postMessage({ jsonrpc: "2.0", method: 5 });
+      raw.postMessage({ jsonrpc: "2.0", id: "x".repeat(301), method: "probe.echo" });
       raw.postMessage({ jsonrpc: "2.0", id: "flooded-last", method: "probe.echo" });
     });
   <\/script>`, document.getElementById("slot"));
