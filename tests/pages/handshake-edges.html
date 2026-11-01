@@ -10,7 +10,7 @@
   const onAudit = (e) => log(`AUDIT ${e.widgetId} ${e.method} ${e.decision}${e.reason ? " · " + e.reason : ""}`);
   const onWidgetFault = (f) => log(`FAULT ${f.widgetId} ${f.kind}`);
   const reporting = (extra) => ({ name: "probe.report", description: "checkpoint",
-    handler: (p) => { log("REPORT " + JSON.stringify(p)); if (extra) extra(p); return true; } });
+    handler: (p, context) => { log("REPORT " + JSON.stringify(p)); log("CALLER " + (p && p.tag) + " " + context.widgetId); if (extra) extra(p); return true; } });
   const addSibling = (script) => {
     const f = document.createElement("iframe");
     f.setAttribute("sandbox", "allow-scripts");

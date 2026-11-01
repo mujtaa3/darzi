@@ -428,7 +428,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     try {
       // Promise.resolve lets a handler return a plain value or a promise.
       const outcome = await untilAborted(
-        Promise.resolve(capability.handler(params.value, { signal })),
+        Promise.resolve(capability.handler(params.value, { signal, widgetId: widget.id })),
         signal,
       );
 

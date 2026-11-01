@@ -83,7 +83,8 @@ marzi refuses params that are more than 32 levels deep, or that have more than
 10,000 values or about 1 MB of text.
 
 To confirm a write, ask in your handler, with UI that your page draws outside the
-frame. A call's deadline is 30 s by default (`callTimeoutMs`), so a handler that
+frame. The handler's second argument has `widgetId`, so the dialog can name the
+widget. A call's deadline is 30 s by default (`callTimeoutMs`), so a handler that
 waits for a person must watch `signal` and close its dialog on abort. Otherwise the
 widget hears that the call timed out, and the write can still happen.
 

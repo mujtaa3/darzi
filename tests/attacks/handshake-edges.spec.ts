@@ -68,8 +68,12 @@ test("a claimed id changes nothing on a call, a refusal, or saved state", async 
   expect(audits, "the refusal").toContain("no.such refused · no such capability");
   expect(audits, "the state call").toContain("marzi/saveState dispatched");
   expect(await attack.logged("PUT "), "the store's key").toEqual(["claimer"]);
-  // In params, the claim is only data. The handler gets no widget id from it.
+  // In params, the claim is only data.
   expect((await attack.reports()).find((r) => r.tag === "claimed")?.widgetId).toBe("other");
+  // The handler's own widgetId comes from the port, also for the call that claims another.
+  expect(await attack.logged("CALLER "), "the id that each handler got").toEqual(expect.arrayContaining([
+    "other-ready other", "claimer-ready claimer", "claimed claimer", "claimer-done claimer",
+  ]));
 });
 
 test("a widget that never connects is reported at startTimeoutMs, and only that widget", async ({ page }) => {
