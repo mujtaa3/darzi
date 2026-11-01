@@ -3,7 +3,7 @@
  * notifications, plus two internal types of the checks in helpers/rpc.ts.
  *
  * ⚠️ TypeScript removes these types at compile time. They describe the shape
- * that marzi expects. Only `parseRequest` and `parseNotification` in
+ * that marzi expects. Only `readId`, `parseRequest` and `parseNotification` in
  * helpers/rpc.ts check it, because a widget can send any value at all.
  */
 

@@ -7,6 +7,8 @@
   window.__log = [];
   const log = (s) => window.__log.push(s);
 
+  window.addEventListener("message", (e) => { if (e.data && e.data.flooded) log("FLOODED " + JSON.stringify(e.data.flooded)); });
+
   const runtime = createRuntime({
     capabilities: [{
       name: "probe.echo", description: "reports what params looked like on arrival",
@@ -15,7 +17,7 @@
         // Three ways a prototype key could do harm: as an own key the handler
         // trips over, as a rewritten prototype on the params object itself, or
         // as pollution of Object.prototype for the whole page.
-        if (p && p.tag === "junk-replies") log("JUNK-REPLIES " + p.replies);
+        if (p && p.tag === "junk-replies") log("JUNK-REPLIES " + JSON.stringify(p));
         log(`REPORT ${JSON.stringify({ tag: p && p.tag, own,
           protoIntact: Object.getPrototypeOf(p) === Object.prototype && p.polluted === undefined,
           polluted: ({}).polluted !== undefined })}`);
@@ -25,21 +27,30 @@
     onAudit: (e) => log(`AUDIT ${e.method} ${e.decision}${e.reason ? " · " + e.reason : ""}`),
   });
 
-  // A second widget sends messages that are not requests. Each one must get no
-  // reply. It counts the replies on its raw port: after the last junk message,
-  // one valid call has its reply, and any other reply came from the junk.
+  // A second widget sends messages that are not requests. Each one gets an audit
+  // line. Only a message with a readable id gets a reply. The widget records the
+  // replies on its raw port, apart from the stub's own, which have number ids.
   runtime.render(`<script>
-    var raw = null, replies = 0;
+    var raw = null, replies = [];
     window.addEventListener("message", function (e) {
-      if (e.ports && e.ports[0]) { raw = e.ports[0]; raw.addEventListener("message", function () { replies += 1; }); }
+      if (!e.ports || !e.ports[0]) return;
+      raw = e.ports[0];
+      raw.addEventListener("message", function (m) {
+        if (typeof m.data.id === "number") return;
+        replies.push(m.data.error ? { id: m.data.id, code: m.data.error.code, message: m.data.error.message } : { id: m.data.id, ok: true });
+      });
     });
     marzi.call("probe.echo", { tag: "junk-control" }).then(function () {
-      var before = replies;
-      [42, "hello", null, [], { jsonrpc: "1.0", id: 1, method: "probe.echo" }, { jsonrpc: "2.0", id: {}, method: "probe.echo" },
-       { jsonrpc: "2.0", id: true, method: "probe.echo" }, { jsonrpc: "2.0", id: 2, method: 5 }, { jsonrpc: "2.0", id: 3 }
+      [42, "hello", null, [], { jsonrpc: "1.0", id: "old-version", method: "probe.echo" }, { jsonrpc: "2.0", id: {}, method: "probe.echo" },
+       { jsonrpc: "2.0", id: true, method: "probe.echo" }, { jsonrpc: "2.0", method: 5 },
+       { jsonrpc: "2.0", id: "method-number", method: 5 }, { jsonrpc: "2.0", id: "method-missing" },
+       { jsonrpc: "2.0", id: "method-object", method: { name: "x" } }
       ].forEach(function (junk) { raw.postMessage(junk); });
+      // The same mistake through the stub. The promise must reject now, and not at the backstop.
+      return marzi.call({ name: "x" }).then(function () { return "it resolved"; }, function (e) { return e.message; });
+    }).then(function (callError) {
       return marzi.call("probe.echo", { tag: "junk-after" }).then(function () {
-        return marzi.call("probe.echo", { tag: "junk-replies", replies: replies - before - 1 });
+        return marzi.call("probe.echo", { tag: "junk-replies", replies: replies, callError: callError });
       });
     });
   <\/script>`, document.getElementById("slot"));
@@ -59,6 +70,17 @@
       send(3, { tag: "deep", deep: deep });
       send(4, { tag: "wide", wide: new Array(10001).fill(0) });
       for (var n = 0; n < 200; n++) send(100 + n, { tag: "flood" });
+
+      // The widget is now over its limit, so it reports past the channel.
+      var seen = [];
+      raw.addEventListener("message", function (m) {
+        if (typeof m.data.id !== "string") return;
+        seen.push({ id: m.data.id, code: m.data.error && m.data.error.code });
+        if (m.data.id === "flooded-last") top.postMessage({ flooded: seen }, "*");
+      });
+      raw.postMessage({ jsonrpc: "2.0", id: "flooded-method-number", method: 5 });
+      raw.postMessage({ jsonrpc: "2.0", method: 5 });
+      raw.postMessage({ jsonrpc: "2.0", id: "flooded-last", method: "probe.echo" });
     });
   <\/script>`, document.getElementById("slot"));
 </script>

@@ -32,6 +32,7 @@ import {
   ok,
   parseNotification,
   parseRequest,
+  readId,
   sanitizeParams,
   withinRate,
 } from "./helpers/rpc.js";
@@ -335,10 +336,10 @@ export function createRuntime(options: RuntimeOptions): Runtime {
           reason: `over ${rateLimit.calls} messages in ${rateLimit.windowMs}ms`,
         });
       }
-      // A request gets an error, so that its promise rejects at once. Anything
-      // else is dropped; faults are best effort.
-      const flooded = parseRequest(raw);
-      return flooded ? fail(flooded.id, RPC.RATE_LIMITED, "rate limited") : null;
+      // A message with a readable id gets an error, so that its promise rejects
+      // at once. Anything else is dropped; faults are best effort.
+      const floodedId = readId(raw);
+      return floodedId === null ? null : fail(floodedId, RPC.RATE_LIMITED, "rate limited");
     }
 
     // 2. Notifications come next. They have no id, so they get no reply, and
@@ -353,16 +354,17 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     // 3. The shape of the request.
     const request = parseRequest(raw);
     if (request === null) {
-      // A malformed message has no id to answer, so the only safe action is to
-      // drop it. An answer would mean trusting a field of a message that the
-      // runtime cannot read.
       audit({
         widgetId: widget.id,
         method: "(unparseable)",
         decision: "refused",
         reason: "malformed message",
       });
-      return null;
+      // `parseRequest` checks the id and the method. So when the id is readable,
+      // the method is the fault, and the widget's promise can reject at once. Any
+      // other message has no id that a reply can carry, so it gets no reply.
+      const id = readId(raw);
+      return id === null ? null : fail(id, RPC.INVALID_REQUEST, "method must be a string");
     }
 
     // 4. The built-in state methods come before the registry. They are part

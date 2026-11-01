@@ -22,6 +22,23 @@ export function fail(id: RpcId, code: number, message: string): RpcResponse {
 }
 
 /**
+ * Read the id of a message from a widget. Returns null if the message has no id
+ * that a reply can carry.
+ *
+ * A message with a readable id gets a reply, even if another field is wrong. The
+ * widget's promise then rejects at once, and does not wait for the stub's backstop.
+ */
+export function readId(raw: unknown): RpcId | null {
+  if (typeof raw !== "object" || raw === null) return null;
+
+  const msg = raw as Record<string, unknown>;
+  if (msg["jsonrpc"] !== "2.0") return null;
+
+  const id = msg["id"];
+  return typeof id === "string" || typeof id === "number" ? id : null;
+}
+
+/**
  * Check a message from a widget. Returns null if it is not a correct request.
  *
  * It BUILDS A NEW request; it does not use the widget's object. The widget's
@@ -29,14 +46,10 @@ export function fail(id: RpcId, code: number, message: string): RpcResponse {
  * fields, and the rest are dropped.
  */
 export function parseRequest(raw: unknown): RpcRequest | null {
-  if (typeof raw !== "object" || raw === null) return null;
+  const id = readId(raw);
+  if (id === null) return null;
 
   const msg = raw as Record<string, unknown>;
-  if (msg["jsonrpc"] !== "2.0") return null;
-
-  const id = msg["id"];
-  if (typeof id !== "string" && typeof id !== "number") return null;
-
   const method = msg["method"];
   if (typeof method !== "string") return null;
 
