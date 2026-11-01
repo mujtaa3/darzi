@@ -79,6 +79,11 @@ This includes a capability that a widget did not declare in its `<capabilities>`
 block. To limit a widget today, give it its own `createRuntime`, with only the
 capabilities that it needs.
 
+To confirm a write, ask in your handler, with UI that your page draws outside the
+frame. A call's deadline is 30 s by default (`callTimeoutMs`), so a handler that
+waits for a person must watch `signal` and close its dialog on abort. Otherwise the
+widget hears that the call timed out, and the write can still happen.
+
 Per-widget grants are designed for the next release, with a new approval when a
 refinement asks for more capabilities, and a read/write switch.
 
