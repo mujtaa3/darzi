@@ -42,6 +42,7 @@ for (const policy of NO_START) {
     const attack = await openUnder(page, policy);
     await attack.untilLog("FAULT w never-started");
     expect(await attack.reports(), "no script of the widget ran").toEqual([]);
+    expect(await attack.logged("INJECTED "), "the page keeps its defence against XSS").toEqual(["blocked"]);
   });
 }
 
@@ -54,5 +55,7 @@ for (const [policy, want] of STARTS) {
     if (want.color) expect(seen?.color, "the widget's style").toBe(want.color);
     if (want.notColor) expect(seen?.color, "the widget's style").not.toBe(want.notColor);
     expect(await attack.logged("FAULT "), "faults").toEqual([]);
+    // The cost that the README states: the page that lets a widget start has lost this.
+    expect(await attack.logged("INJECTED "), "a script that an XSS bug injected").toEqual(["ran"]);
   });
 }

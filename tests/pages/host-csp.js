@@ -3,6 +3,7 @@ import { createRuntime } from "/dist/index.js";
 window.__log = [];
 const log = (s) => window.__log.push(s);
 log("PAGE-RAN");
+log("INJECTED " + (window.__injected ?? "blocked"));
 
 // The widget tests what a host's CSP takes from it: its script, its style and its
 // `data:` image. The window's load event waits for the image. Firefox can give an

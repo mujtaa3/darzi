@@ -226,8 +226,13 @@ images. Tests in Chrome, WebKit, and Firefox show this behavior.
 
 Pages that show widgets need a CSP that allows inline scripts and inline
 styles. If your app uses a strict CSP, give a less strict CSP only to the pages
-that show widgets. A later release may remove this requirement by loading the
-warden from a file.
+that show widgets.
+
+This has a cost. A page that allows inline scripts loses a main defence against
+XSS. If your app has an XSS bug on that page, the injected script runs with your
+session. Widgets gain nothing from this. If you can, show widgets on a separate
+origin. A later release may remove this requirement by loading the warden from a
+file.
 
 A `base-uri` directive needs one more source. The warden has a
 `<base href="about:srcdoc">` tag, which hides your page's URL from the widget.

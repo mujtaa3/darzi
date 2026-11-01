@@ -2,6 +2,8 @@
 <html><head><meta charset="utf-8"><title>host csp</title></head>
 <body>
 <div id="slot"></div>
+<!-- This stands for a script that an XSS bug put on the page. -->
+<script>window.__injected = "ran";</script>
 <!-- A file, not inline: so this page runs under the policies that block inline script. -->
 <script type="module" src="/tests/pages/host-csp.js"></script>
 </body></html>
