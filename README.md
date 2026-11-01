@@ -47,7 +47,8 @@ checks each message from a widget. A capability is a named operation that you
 register, with a handler function. If a call names a registered capability, the
 switchboard runs its handler in your page, with your session. Then it sends the
 result to the widget. The switchboard refuses all other messages, and you can
-record each decision in an audit log.
+record its decisions in an audit log. Over the rate limit, the log gets only the
+first refusal in each window.
 
 **The warden.** A frame can navigate *itself* to a URL such as
 `https://evil.example/?data=…`. Only the parent of the frame can block this
@@ -95,7 +96,7 @@ const runtime = createRuntime({
       fetch("/api/transactions", { signal }).then((r) => r.json()),
   }],
   store: memoryStore(),            // where marzi.saveState lands; implement yours over your backend
-  onAudit: (e) => console.log(e),  // every call, dispatched or refused
+  onAudit: (e) => console.log(e),  // dispatched and refused calls
 });
 
 const widget = runtime.render(htmlTheModelWrote, document.getElementById("slot"));
