@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>webtransport</title></head>
+<body>
+<div id="slot"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+  const mode = new URLSearchParams(location.search).get("mode") ?? "widget";
+
+  // WebTransport runs over QUIC, so a connection attempt is UDP. The witness
+  // listens on 127.0.0.1:3478. As in webrtc.html, the caller loads the two modes
+  // apart, so that each datagram has one source.
+  const probe = (report) => `
+    var out = { supported: typeof WebTransport === "function", error: null };
+    try { new WebTransport("https://127.0.0.1:3478/"); } catch (e) { out.error = e.name; }
+    ${report};`;
+
+  if (mode === "widget") {
+    createRuntime({
+      capabilities: [{ name: "probe.report", description: "result", handler: (p) => { log("REPORT " + JSON.stringify(p)); return true; } }],
+    }).render(`<script>${probe('marzi.call("probe.report", out)')}<\/script>`, document.getElementById("slot"));
+  } else {
+    window.addEventListener("message", (e) => { if (e.data && e.data.control) log("REPORT " + JSON.stringify(e.data.control)); });
+    const f = document.createElement("iframe");
+    f.srcdoc = `<script>${probe('parent.postMessage({ control: out }, "*")')}<\/script>`;
+    document.getElementById("slot").appendChild(f);
+  }
+</script>
+</body></html>

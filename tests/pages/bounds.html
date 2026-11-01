@@ -1,0 +1,110 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>bounds</title></head>
+<body>
+<div id="slot"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+  const query = new URLSearchParams(location.search);
+  const probe = query.get("probe");
+  // The RegExp source length: over the 1 000 000 params budget, and under
+  // WebKit's pattern cap. WebKit refuses a pattern of 1 100 000 characters
+  // with "regular expression too large".
+  const reLength = Number(query.get("n") || 1040000);
+
+  // A heartbeat on the host page: a loop of tasks on its own channel. The
+  // largest gap between two beats is how long the host's main thread was
+  // blocked. It only measures; no test waits on it.
+  let last = performance.now(), maxGap = 0, beating = true;
+  const hb = new MessageChannel();
+  hb.port1.onmessage = () => {
+    const now = performance.now();
+    if (now - last > maxGap) maxGap = now - last;
+    last = now;
+    if (beating) hb.port2.postMessage(0);
+  };
+  hb.port2.postMessage(0);
+
+  // What arrived at a handler, without walking it (a sparse array must not
+  // be iterated here, or the page would measure itself).
+  function shape(v) {
+    if (Array.isArray(v)) return { kind: "array", length: v.length };
+    if (ArrayBuffer.isView(v)) return { kind: "view", bytes: v.byteLength, bufferBytes: v.buffer.byteLength };
+    if (v instanceof ArrayBuffer) return { kind: "buffer", bytes: v.byteLength };
+    if (v instanceof RegExp) return { kind: "regexp", sourceLength: v.source.length };
+    if (v instanceof File) return { kind: "file", nameLength: v.name.length, typeLength: v.type.length };
+    if (v instanceof Blob) return { kind: "blob", typeLength: v.type.length };
+    if (typeof v === "string") return { kind: "string", length: v.length };
+    return { kind: typeof v };
+  }
+
+  createRuntime({
+    capabilities: [
+      { name: "probe.echo", description: "reports the shape of params.v",
+        handler: (p) => { log("HANDLER " + JSON.stringify(shape(p && p.v))); return true; } },
+      { name: "probe.mark", description: "logs a step and the largest heartbeat gap since the last mark",
+        handler: (p) => {
+          log(`MARK ${p.step} gap=${Math.round(maxGap)}ms`);
+          maxGap = 0; last = performance.now();
+          if (p.step === "done") beating = false;
+          return true;
+        } },
+    ],
+    store: { getState: async () => null, putState: async (id, json) => { log(`STATE ${json.length}`); } },
+    onAudit: (e) => log(`AUDIT ${e.decision} len=${e.method.length} method=${e.method.slice(0, 32)} reason=${e.reason ?? ""}`),
+  }).render(`<script>
+    var probe = ${JSON.stringify(probe)};
+    var RE_LENGTH = ${reLength};
+    // Each step: [label, method, a function that builds params]. The control
+    // comes first in each list: a value that the switchboard refuses today.
+    var STEPS = {
+      sparse: [
+        ["control-packed", "probe.echo", function () { return { v: new Array(10001).fill(0) }; }],
+        ["sparse", "probe.echo", function () { return { v: new Array(100000000) }; }]
+      ],
+      holes: [
+        ["control-short", "probe.echo", function () { return { v: [1, , 3] }; }],
+        // About 52 KB on the wire: 9998 references to one array of 10000 holes.
+        ["holes", "probe.echo", function () { var a = []; a.length = 10000; return { v: new Array(9998).fill(a) }; }],
+        ["holes-state", "marzi/saveState", function () { var a = []; a.length = 10000; return { value: new Array(9998).fill(a) }; }]
+      ],
+      method: [
+        ["control-short", "nope", function () { return {}; }],
+        ["long-method", "z".repeat(2000000), function () { return {}; }]
+      ],
+      view: [
+        ["control-buffer", "probe.echo", function () { return { v: new ArrayBuffer(50000000) }; }],
+        ["view", "probe.echo", function () { return { v: new Uint8Array(new ArrayBuffer(50000000), 0, 1) }; }]
+      ],
+      regexp: [
+        ["control-string", "probe.echo", function () { return { v: "b".repeat(1100000) }; }],
+        ["regexp", "probe.echo", function () { return { v: new RegExp("b".repeat(RE_LENGTH)) }; }]
+      ],
+      file: [
+        ["control-string", "probe.echo", function () { return { v: "b".repeat(1100000) }; }],
+        ["control-small", "probe.echo", function () { return { v: new File(["abc"], "a.txt", { type: "text/plain" }) }; }],
+        ["file-name", "probe.echo", function () { return { v: new File([], "n".repeat(2000000)) }; }],
+        ["file-type", "probe.echo", function () { return { v: new File([], "x", { type: "t".repeat(2000000) }) }; }],
+        ["blob-type", "probe.echo", function () { return { v: new Blob([], { type: "t".repeat(2000000) }) }; }]
+      ]
+    };
+    function run(i) {
+      var s = STEPS[probe][i];
+      if (!s) { marzi.call("probe.mark", { step: "done" }); return; }
+      marzi.call("probe.mark", { step: s[0] + ":start" })
+        .then(function () {
+          // A value that the engine cannot build is reported, so the steps go on.
+          var params;
+          try { params = s[2](); } catch (e) { return "build failed: " + e.name + " " + e.message; }
+          return marzi.call(s[1], params).then(
+            function () { return "ok"; },
+            function (e) { return "refused, reply length " + String(e.message).length; });
+        })
+        .then(function (outcome) { return marzi.call("probe.mark", { step: s[0] + ":end " + outcome }); })
+        .then(function () { run(i + 1); });
+    }
+    run(0);
+  <\/script>`, document.getElementById("slot"));
+</script>
+</body></html>

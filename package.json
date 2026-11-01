@@ -1,7 +1,7 @@
 {
   "name": "marzi",
   "version": "0.1.0",
-  "description": "Run LLM-generated widgets safely inside your web app.",
+  "description": "Run LLM-generated widgets in a sandbox inside your web app.",
   "keywords": [
     "llm",
     "ai",
@@ -15,9 +15,20 @@
     "security"
   ],
   "license": "MIT",
+  "author": "Ahmed Mujtaba",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mujtaa3/marzi.git"
+  },
+  "homepage": "https://github.com/mujtaa3/marzi#readme",
+  "bugs": {
+    "url": "https://github.com/mujtaa3/marzi/issues"
+  },
   "private": true,
   "type": "module",
   "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -31,15 +42,15 @@
     "prompts"
   ],
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc --watch",
+    "build": "node scripts/stub.mjs && tsc",
+    "watch": "node scripts/stub.mjs && tsc --watch",
     "clean": "rm -rf dist",
+    "prepack": "npm run clean && npm run build",
     "test": "playwright test -c tests/playwright.config.ts"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
     "@playwright/test": "^1.63.0",
-    "chart.js": "^4.5.1",
     "typescript": "^5.7.2"
   }
 }

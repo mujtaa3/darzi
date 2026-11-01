@@ -1,0 +1,76 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>loads</title></head>
+<body>
+<div id="slot"></div><div id="control"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+  const WITNESS = "http://127.0.0.1:9999/witness";
+
+  // Each other way that a document can start a request: connectivity.html has
+  // the ten basic ones. One function runs in the jailed widget AND in the free
+  // control frame, so a probe that never fires is missing from the control too.
+  function probe(W, side) {
+    function via(name) { return W + "?via=" + side + "-" + name; }
+    function attempt(fn) { try { fn(); } catch (e) {} }
+    function hint(rel, name, as) {
+      var l = document.createElement("link");
+      l.rel = rel;
+      if (as) { l.as = as; l.crossOrigin = "anonymous"; }
+      l.href = via(name);
+      document.head.appendChild(l);
+    }
+    // A nested document's script tries the same request. It tells its parent
+    // that it ran, so that "nothing arrived" cannot mean "the script never ran".
+    function nestedScript(name) {
+      return "<script>parent.postMessage({ ran: " + JSON.stringify(name) + " }, '*');" +
+        "fetch(" + JSON.stringify(via(name)) + ").catch(function () {});<\/script>";
+    }
+    var SVG = "http://www.w3.org/2000/svg";
+
+    // Resource hints.
+    attempt(function () { hint("prefetch", "prefetch"); });
+    attempt(function () { hint("preload", "preload", "fetch"); });
+    attempt(function () { hint("modulepreload", "modulepreload"); });
+    // CSS.
+    attempt(function () { var s = document.createElement("style"); s.textContent = "@import url(" + JSON.stringify(via("css-import")) + ");"; document.head.appendChild(s); });
+    attempt(function () { var d = document.createElement("div"); d.style.background = "url(" + JSON.stringify(via("css-url")) + ")"; d.textContent = "bg"; document.body.appendChild(d); });
+    // SVG. `<use>` is not here: it loads only from the same origin, and a widget's
+    // origin is opaque. Even a free frame sent nothing for it (tested).
+    attempt(function () { var s = document.createElementNS(SVG, "svg"); var i = document.createElementNS(SVG, "image"); i.setAttribute("href", via("svg-image")); s.appendChild(i); document.body.appendChild(s); });
+    // Media and plugins.
+    attempt(function () { var v = document.createElement("video"); v.src = via("video"); v.preload = "auto"; document.body.appendChild(v); v.load(); });
+    attempt(function () { var e = document.createElement("embed"); e.src = via("embed"); document.body.appendChild(e); });
+    // Scripted requests.
+    attempt(function () { new EventSource(via("eventsource")); });
+    attempt(function () { import(via("import")).catch(function () {}); });
+    attempt(function () { var a = document.createElement("a"); a.href = "javascript:void(0)"; a.ping = via("ping"); document.body.appendChild(a); a.click(); });
+    attempt(function () { if (typeof fetchLater === "function") fetchLater(via("fetchlater"), { activateAfter: 0 }); });
+    // Nested documents.
+    attempt(function () { var f = document.createElement("iframe"); document.body.appendChild(f); var d = f.contentDocument; d.open(); d.write(nestedScript("nested-blank")); d.close(); });
+    attempt(function () { var f = document.createElement("iframe"); f.setAttribute("srcdoc", nestedScript("nested-srcdoc")); document.body.appendChild(f); });
+    attempt(function () { var f = document.createElement("iframe"); f.src = "data:text/html," + encodeURIComponent(nestedScript("nested-data")); document.body.appendChild(f); });
+    attempt(function () { var f = document.createElement("iframe"); f.src = URL.createObjectURL(new Blob([nestedScript("nested-blob")], { type: "text/html" })); document.body.appendChild(f); });
+    // Workers.
+    attempt(function () { new Worker(URL.createObjectURL(new Blob(["fetch(" + JSON.stringify(via("worker-blob")) + ").catch(function () {});"], { type: "text/javascript" }))); });
+    attempt(function () { new Worker("data:text/javascript," + encodeURIComponent("fetch(" + JSON.stringify(via("worker-data")) + ").catch(function () {});")); });
+  }
+
+  const runtime = createRuntime({
+    capabilities: [{ name: "probe.report", description: "done", handler: (p) => { log(p.ran ? "WIDGET-NESTED-RAN " + p.ran : "widget-done"); } }],
+  });
+  runtime.render(`<script>
+    window.addEventListener("message", function (e) {
+      if (e.data && e.data.ran) marzi.call("probe.report", { ran: e.data.ran });
+    });
+    (${probe})(${JSON.stringify(WITNESS)}, "widget");
+    setTimeout(function () { marzi.call("probe.report", {}); }, 1000);
+  <\/script>`, document.getElementById("slot"));
+
+  // Control: the same probes from a plain frame with no sandbox and no CSP.
+  const control = document.createElement("iframe");
+  control.srcdoc = `<body><script>(${probe})(${JSON.stringify(WITNESS)}, "control");<\/script></body>`;
+  document.getElementById("control").appendChild(control);
+</script>
+</body></html>

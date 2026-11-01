@@ -1,17 +1,15 @@
 node_modules/
 dist/
 *.tsbuildinfo
+# Generated from src/frame-stub.js by scripts/stub.mjs (npm run build)
+src/frame-stub.ts
 .DS_Store
-
-# Your local finance state (budgets, notes, recategorizations) — not the repo's
-app/data.local.json
-# Your saved widgets and their state — same deal
-app/widgets.local.json
 
 # Kept local for now (working notes / agent instructions), not part of the repo
 docs/
 learnings/
 CLAUDE.md
+review/
 
 # Secrets — the API key lives here; never committed
 .env

@@ -1,0 +1,138 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>faults</title></head>
+<body>
+<div id="slot"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+  const slot = document.getElementById("slot");
+
+  // A host-vendored "library": one function that throws from inside the
+  // library's own text, one that calls back into widget code. The library sits
+  // in the document's <head>, so its line numbers come before any widget line.
+  const libSrc = [
+    "window.LIB = {",
+    '  explode: function () { throw new Error("from-lib"); },',
+    "  call: function (fn) { fn(); }",
+    "};",
+  ].join("\n");
+
+  let victim = null;
+  const runtime = createRuntime({
+    capabilities: [{
+      name: "probe.report", description: "checkpoint",
+      handler: (p) => {
+        log("REPORT " + JSON.stringify(p));
+        // The armed widget is destroyed from inside its own call, while the
+        // fault it threw right after that call is still queued on the port.
+        if (p && p.tag === "armed" && victim) { victim.destroy(); victim = null; log("DESTROYED after-destroy"); }
+        return true;
+      },
+    }],
+    libraries: [{ name: "lib", source: libSrc }],
+    // Small on purpose: the flood case then needs 500 throws, not thousands.
+    rateLimit: { calls: 20, windowMs: 10_000 },
+    onAudit: (e) => log(`AUDIT ${e.widgetId} ${e.method} ${e.decision}${e.reason ? " · " + e.reason : ""}`),
+    onWidgetFault: (f) => log("FAULT " + JSON.stringify(f)),
+  });
+
+  // Bodies are joined with "\n" so every line number asserted below is exact.
+  const lines = (...l) => l.join("\n");
+  const render = (id, body, libs) => runtime.render(body, slot, { id, libs });
+
+  // Control: a plain throw on body line 3.
+  render("typeerror", lines(
+    "<p>control</p>",
+    "<script>",
+    'throw new TypeError("boom");',
+    "<\/script>"));
+
+  // An unhandled rejection has a reason but no position.
+  render("rejection", lines('<script>Promise.reject(new RangeError("late"));<\/script>'));
+
+  // A 100 KB message must arrive clamped.
+  render("oversize", lines('<script>throw new Error("x".repeat(100000));<\/script>'));
+
+  // A parse error in the widget's script is a fault too, on the line that broke.
+  render("syntax", lines(
+    "<p>syntax</p>",
+    "<script>",
+    "var = ;",
+    "<\/script>"));
+
+  // An exception thrown later, from an event listener, still reaches the host.
+  render("click", lines(
+    '<button id="b">b</button>',
+    "<script>",
+    'document.getElementById("b").addEventListener("click", function () {',
+    '  throw new Error("from-click");',
+    "});",
+    'document.getElementById("b").click();',
+    "<\/script>"));
+
+  // JavaScript counts U+2028 as a line break, and HTML does not.
+  render("line-separator", lines(
+    "<script>",
+    'var text = "a\u2028b";',
+    'throw new Error("after-separator");',
+    "<\/script>"));
+
+  // Thrown inside the library's text: the position is not the widget's.
+  render("library", lines("<script>LIB.explode();<\/script>"), ["lib"]);
+  // Thrown by widget code that a library called back into: body line 2.
+  render("library-caller", lines(
+    "<script>",
+    'function f() { throw new Error("from-widget"); }',
+    "LIB.call(f);",
+    "<\/script>"), ["lib"]);
+
+  // Forged notifications on the raw port: positions out of range or of the
+  // wrong type, a position inside the host's part of the document, a position
+  // past the widget's last line, an oversized name, messages that are not
+  // strings (one whose toString cannot be called), a message whose cut would
+  // fall inside a surrogate pair, a message with line breaks, one with
+  // direction marks, one with a lone surrogate half, names that are not error
+  // class names, and fields a widget may not set — including the id of another
+  // widget that is live on the page.
+  render("forged", lines(
+    "<script>",
+    "var raw = null;",
+    'window.addEventListener("message", function (e) { if (e.ports && e.ports[0]) raw = e.ports[0]; });',
+    'marzi.call("probe.report", { tag: "forged-ready" }).then(function () {',
+    '  var send = function (params) { raw.postMessage({ jsonrpc: "2.0", method: "marzi/fault", params: params }); };',
+    '  send({ message: "forged-big", line: 1000000000, column: 5 });',
+    '  send({ message: "forged-negative", line: -5, column: 1 });',
+    '  send({ message: "forged-string", line: "7", column: "2" });',
+    '  send({ message: "forged-float", line: 7.5, column: 1 });',
+    '  send({ message: "forged-head", line: 2, column: 1 });',
+    '  send({ message: "forged-beyond", line: 5000, column: 1 });',
+    '  send({ message: "forged-name", name: new Array(1001).join("N") });',
+    '  send({ message: new Array(5001).join("y") });',
+    "  send({ message: 12345 });",
+    "  send({ message: { toString: 1 } });",
+    '  send({ message: new Array(300).join("a") + "\\uD83D\\uDE00" });',
+    '  send({ message: "forged-lines\\nline two\\u2028line three", name: "TypeError\\n## Host note" });',
+    '  send({ message: "forged-bidi \\u202Eevil\\u202C text", name: "Range Error" });',
+    '  send({ message: "forged-lone\\uD800x", name: "My.Error$1" });',
+    '  send({ message: "forged-extra", widgetId: "typeerror", kind: "never-started", extra: 1 });',
+    "});",
+    "<\/script>"));
+
+  // 500 throws from one widget: the rate limit, not the host, decides how many arrive.
+  render("flood", lines(
+    "<script>",
+    'for (var i = 0; i < 500; i++) { setTimeout(function () { throw new Error("flood"); }, 0); }',
+    "<\/script>"));
+
+  // A fault queued behind the call that destroys its widget never arrives.
+  // The identical twin that nobody destroys proves the fault was real.
+  const armed = (tag) => lines(
+    "<script>",
+    'marzi.call("probe.report", { tag: "' + tag + '" });',
+    'throw new Error("late-throw");',
+    "<\/script>");
+  victim = render("after-destroy", armed("armed"));
+  render("after-destroy-control", armed("armed-control"));
+</script>
+</body></html>

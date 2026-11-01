@@ -1,8 +1,9 @@
 # Widget author — prompt template v0
 
 The template marzi ships for teaching a model to write widgets. The host app
-substitutes `{{CAPABILITIES}}` and `{{REQUEST}}` and sends the result to its own
-model (marzi never calls an LLM itself).
+substitutes `{{CAPABILITIES}}`, `{{LIBRARIES}}` and `{{REQUEST}}` and sends the
+result to its own model (marzi never calls an LLM itself). Fill all slots in one
+pass with a function replacer; widget-repair.md's header says why.
 
 Every constraint below is derived from the real runtime — the sandbox tokens in
 `src/jail.ts` and the CSP in `WIDGET_CSP`. If you change one, change the other.
@@ -28,6 +29,8 @@ habits from ordinary web development will fail here:
   unavailable.
 - **No access to the surrounding page.** `parent`, `top`, and `window.opener`
   give you nothing.
+- **No `eval` and no WebAssembly.** `eval`, `new Function` and `WebAssembly` all
+  throw here. A library that needs them will not work.
 - **No peer-to-peer connections.** Do not use WebRTC (`RTCPeerConnection`
   and related APIs). The host refuses to run any widget whose code mentions
   them, anywhere — even in a comment.
@@ -64,8 +67,9 @@ marzi.saveState({ budget: 500 });             // replaces the whole slot
 
 - Use it for **user-chosen settings** — a budget, a threshold, a preferred
   view. Not for caching capability data: fetch data fresh each time.
-- `loadState` resolves to exactly what was saved, or `null` if nothing was.
-  Always handle the `null` first run.
+- `loadState` resolves to the saved value after a JSON round trip, or `null` if
+  nothing was saved. Save plain JSON: a `Date` comes back as a string. Always
+  handle the `null` first run.
 - Keep it small (one JSON object, well under 50 KB) — oversized saves are
   refused. Both functions return Promises and can reject; handle it.
 
@@ -98,9 +102,8 @@ markdown fences:
 ```
 
 - `<title>`: three or four words. It is shown to the user as the widget's name.
-- `<capabilities>`: exactly the ones your code calls — no more. The user is
-  asked to approve this list, so requesting extras you don't need will get your
-  widget rejected. Leave it empty if you call none.
+- `<capabilities>`: exactly the ones your code calls — no more. Leave it empty
+  if you call none.
 - `<libs>`: exactly the libraries your code uses, from the list above — no
   more, and never a name that isn't listed. Leave it empty if you use none.
 - `<widget>`: an HTML **fragment**, not a full document. No `<!doctype>`,

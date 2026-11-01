@@ -8,15 +8,29 @@
   const log = (s) => window.__log.push(s);
 
   // One capability returns plain data (the control); two return values that
-  // structured clone cannot copy — the realistic developer slips.
+  // structured clone cannot copy — the realistic developer slips. One handler
+  // throws, and so does the store: the widget must get generic text, never
+  // these messages.
   const runtime = createRuntime({
     capabilities: [
       { name: "probe.plain", description: "cloneable", handler: () => ({ rows: [1, 2, 3] }) },
       { name: "probe.callback", description: "object carrying a function", handler: () => ({ total: 3, format: (n) => "$" + n }) },
       { name: "probe.response", description: "a fetch Response: the forgot-.json() slip", handler: () => new Response("{}") },
+      { name: "probe.boom", description: "a handler that throws", handler: () => { throw new Error("SECRET-INTERNAL"); } },
       { name: "probe.report", description: "checkpoint", handler: (p) => { log("REPORT " + JSON.stringify(p)); return true; } },
     ],
-    onAudit: (e) => log(`AUDIT ${e.method} ${e.decision}${e.reason ? " · " + e.reason : ""}`),
+    store: {
+      getState: async () => { throw new Error("SECRET-STORE"); },
+      putState: async () => { throw new Error("SECRET-STORE"); },
+    },
+    onAudit: (e) => {
+      log(`AUDIT ${e.method} ${e.decision}${e.reason ? " · " + e.reason : ""}`);
+      log(`ORDER audit ${e.widgetId} ${e.method} ${e.decision}`);
+    },
+    onWidgetFault: (f) => {
+      log("FAULT " + JSON.stringify(f));
+      log(`ORDER fault ${f.widgetId}`);
+    },
   });
 
   // The widget times each call and reports how it settled.
@@ -27,8 +41,12 @@
         function (v) { return { name: name, ok: true, ms: Math.round(performance.now() - t0), value: v }; },
         function (e) { return { name: name, ok: false, ms: Math.round(performance.now() - t0), error: e.message }; });
     }
-    Promise.all([time("probe.plain"), time("probe.callback"), time("probe.response")])
+    Promise.all([time("probe.plain"), time("probe.callback"), time("probe.response"),
+                 time("probe.boom"), time("marzi/loadState")])
       .then(function (results) { marzi.call("probe.report", { results: results }); });
   <\/script>`, document.getElementById("slot"));
+
+  // A widget that leaves the failure unhandled: a fault, after the audit line.
+  runtime.render(`<script>marzi.call("probe.boom");<\/script>`, document.getElementById("slot"), { id: "unhandled" });
 </script>
 </body></html>

@@ -1,189 +1,124 @@
 /**
- * The jail — how a widget's document is built so the browser confines it.
+ * The jail: how marzi builds a widget's documents so that the browser confines
+ * the widget.
  *
- * Three independent mechanisms do the work, and it is worth keeping them apart
- * in your head because they govern different things:
+ * Three separate mechanisms do the work. Each one controls a different thing:
  *
- *   sandbox attribute  →  IDENTITY. Withholding `allow-same-origin` gives the
- *                         frame an opaque origin, so the host DOM and cookies
- *                         are a stranger's property to it.
- *   CSP                →  CONNECTIVITY. `default-src 'none'` denies the whole
- *                         fetch family, so the frame cannot reach the network.
- *   the warden         →  NAVIGATION. A frame navigating ITSELF is neither an
- *                         identity nor a fetch question; only the embedder's
- *                         `frame-src` governs it. We are not the embedder of
- *                         the host page — so we insert a frame we do control
- *                         between the host and the widget. See `warden()`.
+ *   sandbox attribute  →  IDENTITY. Without `allow-same-origin`, the frame has
+ *                         an opaque origin. So the host page and its cookies
+ *                         belong to a different site.
+ *   CSP                →  CONNECTIONS. `default-src 'none'` blocks all fetches,
+ *                         so the frame cannot reach the network.
+ *   the warden         →  NAVIGATION. Only the `frame-src` of the page that
+ *                         embeds a frame controls that frame's navigation. The
+ *                         host page is not ours, so marzi puts a frame that it
+ *                         controls between the host and the widget. See
+ *                         `warden()`.
  *
- * None substitutes for another. The repository's attack suite
- * (tests/attacks/) measures each one in Chrome, WebKit and Firefox.
+ * One mechanism cannot replace another. Three smaller settings also apply: the
+ * Permissions Policy (`FRAME_ALLOW`), the referrer policy and the warden's
+ * `<base>`. The attack suite (tests/attacks/) tests the three mechanisms in
+ * Chrome, WebKit and Firefox.
  */
 
+import { FRAME_ALLOW, FRAME_REFERRER_POLICY, SANDBOX_TOKENS, WARDEN_BASE_URL, WARDEN_CSP, WIDGET_CSP } from "./consts/jail.js";
 import { FRAME_STUB } from "./frame-stub.js";
+import { attributeSafe, inlineScriptSafe, lineBreaks } from "./helpers/jail.js";
+import type { Scaffold } from "./types/jail.js";
 
 /**
- * The single sandbox token we grant. Everything else — same origin, popups,
- * top navigation, forms, modals — stays withheld.
+ * Put the model's HTML into a document whose head marzi writes.
+ *
+ * The CSP `<meta>` must come before every byte of the widget, because a meta
+ * policy controls only what the parser reads after it. marzi writes the whole
+ * document, so the widget can never put a tag before ours.
+ *
+ * The order in the head matters:
+ *   1. the stub, so that `marzi` exists before any library runs;
+ *   2. the vendored libraries, so that their globals exist when widget code
+ *      runs during the parse;
+ *   3. then the widget HTML, in the body.
+ *
+ * `libSources` is library text that the HOST vendored and pinned. The frame
+ * never fetches it, because the frame has no network and must keep none. A
+ * library runs inside the jail, so it has no authority: it cannot reach
+ * anything that the widget cannot reach. To inject a library is to compose
+ * the document, not to give a permission.
+ *
+ * The function also returns the lines of the document that hold the widget
+ * HTML. A browser reports an error's line in the whole document, stub and
+ * libraries included. So the runtime needs the start of the widget HTML to
+ * turn that number into a line of the widget's own HTML (see WidgetFault.line).
  */
-export const SANDBOX_TOKENS = "allow-scripts";
-
-/**
- * The widget's egress firewall, enforced by the browser.
- *
- * `default-src 'none'` denies every category outright; the rest add back the
- * minimum a widget needs to draw itself. Note what is NOT added back: there is
- * no `connect-src`, so it inherits 'none' — fetch, XHR, WebSocket, EventSource
- * and sendBeacon are all dead. Nor is there any remote source for scripts,
- * styles, images or fonts, so a widget cannot beacon out by loading one.
- *
- * `'unsafe-inline'` looks alarming and is correct here. Its usual danger is
- * that it lets INJECTED script run alongside a page's trusted script — but this
- * document has no trusted script. The whole document is untrusted by design.
- * We are not trying to stop code from running; we are stopping it reaching out.
- */
-export const WIDGET_CSP = [
-  "default-src 'none'", // deny everything, then hand back only what's needed
-  "script-src 'unsafe-inline'", // the model writes its JS inline; no remote scripts
-  "style-src 'unsafe-inline'", // same for CSS
-  "img-src data:", // inline images only — a remote <img> would be a beacon
-  "font-src data:",
-  "form-action 'none'", // submitting a form is a navigation, i.e. an exfil channel
-  // WebRTC has its own network path, which `connect-src` never covered; this
-  // directive exists for it. MEASURED 2026-09-27 (tests/attacks/webrtc.spec.ts):
-  // no engine we test honours it — Chrome, WebKit and Firefox all let a widget
-  // reach a STUN witness exactly as an unrestricted frame does. It stays in the
-  // policy because it costs nothing and engines may ship it; the suite pins the
-  // current behaviour so that day is noticed. Documented residual in README.
-  "webrtc 'block'",
-].join("; ");
-
-/**
- * Powerful device features the frame may request. Empty means none of them.
- *
- * A third mechanism, independent of sandbox and CSP: Permissions Policy governs
- * camera, microphone, geolocation, sensors, payment and friends. Without this a
- * widget could trigger a browser permission prompt that appears to come from
- * the host app — a phishing surface whether the user accepts or declines.
- */
-export const FRAME_ALLOW = "";
-
-/**
- * Keep the host's URL out of anything the frame causes.
- *
- * A navigation normally carries a `Referer` naming the page it came from, and
- * app URLs routinely contain ids and tokens. The warden stops a widget
- * navigating itself away; should a navigation ever get out regardless, this
- * keeps it from also handing over where it came from.
- */
-export const FRAME_REFERRER_POLICY = "no-referrer";
-
-/**
- * Make JavaScript text safe to embed in an inline <script>.
- *
- * The HTML parser does not understand JavaScript: inside a <script> element it
- * simply scans for the characters `</script` (case-insensitive) and ends the
- * element there — even mid-string. Vendored library text is thousands of lines
- * we didn't write, so the sequence must be neutralised. Replacing `</script`
- * with `<\/script` is semantically identical inside a JS string literal
- * ("\/" === "/") and cannot appear as valid syntax outside one.
- */
-function inlineScriptSafe(source: string): string {
-  return source.replace(/<\/script/gi, "<\\/script");
-}
-
-/**
- * Wrap the model's HTML in a document whose head we control.
- *
- * The CSP `<meta>` must precede every widget byte, because a meta policy only
- * governs what is parsed after it. Composing the document ourselves is what
- * makes that guarantee — the widget can never get a tag in ahead of ours.
- *
- * Head order matters: the stub first (so `marzi` exists no matter what a
- * library does), then vendored libraries (so their globals exist by the time
- * widget code runs during parse), then the widget's body.
- *
- * `libSources` is library text the HOST vendored and pinned — never fetched,
- * because the frame has no network and must keep having none. A library runs
- * inside the jail and therefore holds no authority: it cannot reach anything
- * the widget could not already reach. Injection is composition, not permission.
- */
-export function scaffold(body: string, libSources: string[] = []): string {
+export function scaffold(body: string, libSources: string[] = []): Scaffold {
   const libs = libSources
-    .map((source) => `<script>${inlineScriptSafe(source)}</script>\n`)
+    .map((source) => `    <script>${inlineScriptSafe(source)}</script>\n`)
     .join("");
-  return `<!doctype html>
+  // The document around the widget HTML. `beforeBody` is kept separate so that
+  // its lines can be counted. The indents become part of the document; they add
+  // no line breaks.
+  const beforeBody = `<!doctype html>
 <html>
-<head>
-<meta http-equiv="Content-Security-Policy" content="${WIDGET_CSP}">
-<meta charset="utf-8">
-<script>${FRAME_STUB}</script>
-${libs}</head>
-<body>
-${body}
-</body>
+  <head>
+    <meta http-equiv="Content-Security-Policy" content="${WIDGET_CSP}">
+    <meta charset="utf-8">
+    <script>${FRAME_STUB}</script>
+${libs}  </head>
+  <body>
+`;
+  const afterBody = `
+  </body>
 </html>`;
+
+  const first = lineBreaks(beforeBody) + 1;
+  return {
+    html: beforeBody + body + afterBody,
+    bodyLines: { first, last: first + lineBreaks(body) },
+  };
 }
 
 /**
- * The warden's policy: everything the widget document is allowed, plus the one
- * directive that governs the widget's navigation.
+ * Put a widget document inside the warden: an outer frame that marzi controls.
+ * Its `frame-src 'none'` stops the widget from navigating itself away with
+ * data in the URL.
  *
- * `frame-src` is checked by the EMBEDDER of a frame against every navigation
- * of that frame — including the frame navigating itself via `location=`,
- * `location.replace`, a meta refresh or a form submit — and the block lands
- * before any DNS or TCP leaves the machine (verified in Chrome, Firefox, WebKit
- * and Safari; the attack suite's navigation spec re-checks it). `'none'` is
- * the only safe value: any allowed origin would be a destination for stolen
- * data.
+ * The warden has no script, and the handshake does not need one. The widget
+ * sends "ready" to `parent.parent` (the host page). The host answers the
+ * widget's window directly, through `frames[0]`. A frame with no script has
+ * nothing that a widget could trick or change. The warden and the widget have
+ * different opaque origins, so the widget can send to the warden but cannot
+ * read it.
  *
- * Why the rest of the widget's policy is repeated here: a `srcdoc` document
- * inherits its parent's policy container in addition to its own. A bare
- * `default-src 'none'` on the warden would therefore strip the widget of its
- * inline script and style. Same allowances, one extra directive.
+ * Nested frames inherit `sandbox` flags, so the warden needs `allow-scripts`
+ * for the widget's scripts to run. It runs no script of its own.
  *
- * Strictly, the extra directive is belt and braces: `frame-src` falls back to
- * `child-src`, which falls back to `default-src`, and the widget policy already
- * says `default-src 'none'`. The attack suite's mutation check found this —
- * removing only `frame-src 'none'` changed nothing. It stays because the
- * warden's whole purpose should be legible in its policy, and because a future
- * edit to WIDGET_CSP must not silently take the warden's teeth with it.
- *
- * That is also why it comes FIRST. When a policy names the same directive
- * twice, the browser keeps the first and ignores the rest. Appended, this one
- * would lose to any `frame-src` later added to WIDGET_CSP (measured: with
- * `frame-src *` there, widgets navigated themselves to the witness in every
- * engine). First, it wins whatever WIDGET_CSP says.
- */
-export const WARDEN_CSP = `frame-src 'none'; ${WIDGET_CSP}`;
-
-/** Escape a document so it can ride inside an HTML attribute (srcdoc). */
-function attributeSafe(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-}
-
-/**
- * Wrap a widget document in the warden: a frame we control, whose `frame-src
- * 'none'` is what stops the widget from navigating itself away with data in
- * the URL.
- *
- * The warden carries NO script. The handshake does not need one: the widget
- * knocks on `parent.parent` (the host), and the host verifies and answers the
- * widget's window directly through the cross-origin window allowlist
- * (`frames[0]`, `postMessage`). An inert document has nothing to trust and
- * nothing a widget could tamper with — the two frames have different opaque
- * origins, so `parent` is a window the widget can address but never touch.
- *
- * `sandbox` flags are inherited by nested frames, so the warden must carry
- * `allow-scripts` for the widget's scripts to run; it runs none of its own.
+ * The `<base>` hides the host page's URL. A `srcdoc` document has no URL of its
+ * own, so it takes its base URL from its parent. Without this tag, the host
+ * URL, with its query and fragment, is the widget's `document.baseURI`, and
+ * `<a href="#x">` is a real navigation that the warden blocks. The tag is here
+ * because the widget cannot change the warden. A `<base>` in the widget's
+ * document does not work: the widget can remove it. A host CSP with `base-uri`
+ * can block this tag, so `render` checks first (see `baseTagAllowed`).
  */
 export function warden(innerDocument: string): string {
   return `<!doctype html>
 <html>
-<head>
-<meta http-equiv="Content-Security-Policy" content="${WARDEN_CSP}">
-<meta charset="utf-8">
-<style>html,body{margin:0;height:100%}iframe{display:block;width:100%;height:100%;border:0}</style>
-</head>
-<body><iframe sandbox="${SANDBOX_TOKENS}" allow="${FRAME_ALLOW}" referrerpolicy="${FRAME_REFERRER_POLICY}" srcdoc="${attributeSafe(innerDocument)}"></iframe></body>
+  <head>
+    <meta http-equiv="Content-Security-Policy" content="${WARDEN_CSP}">
+    <meta charset="utf-8">
+    <base href="${WARDEN_BASE_URL}">
+    <style>
+      html, body { margin: 0; height: 100%; }
+      iframe { display: block; width: 100%; height: 100%; border: 0; }
+    </style>
+  </head>
+  <body>
+    <iframe
+      sandbox="${SANDBOX_TOKENS}"
+      allow="${FRAME_ALLOW}"
+      referrerpolicy="${FRAME_REFERRER_POLICY}"
+      srcdoc="${attributeSafe(innerDocument)}"
+    ></iframe>
+  </body>
 </html>`;
 }

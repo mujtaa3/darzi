@@ -36,10 +36,10 @@
 
   if (mode === "widget") {
     const runtime = createRuntime({
-      // Screen OFF on purpose: this spec measures what the engine does with a
-      // widget that reaches WebRTC, which the screen cannot rule out (it only
-      // sees the body at render time). screen.spec.ts covers the screen.
-      screen: [],
+      // Forbidden text OFF on purpose: this spec measures what the engine does
+      // with a widget that reaches WebRTC, which the check cannot rule out (it
+      // only sees the body at render time). forbidden-text.spec.ts covers it.
+      forbiddenText: [],
       capabilities: [{ name: "probe.report", description: "result", handler: (p) => { log("REPORT " + JSON.stringify(p)); return true; } }],
       onWidgetFault: (f) => log("FAULT " + f.kind + " " + f.message),
     });

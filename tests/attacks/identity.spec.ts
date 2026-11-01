@@ -20,7 +20,8 @@ test("a widget cannot see the host page, its cookies, or storage", async ({ page
   // all, and asserts the mechanism directly — the widget's origin is opaque.
   expect(rows["self.origin"], "self.origin").toMatchObject({ verdict: "allowed", detail: "null" });
 
-  // Host DOM and URL: must throw everywhere.
+  // Host DOM and URL: must throw everywhere. The base URL is one more way to
+  // read the host URL, and it does not throw: see base.spec.ts.
   expect(rows["parent.document"]?.verdict, "parent.document").toBe("blocked");
   expect(rows["top.location.href"]?.verdict, "top.location.href").toBe("blocked");
 

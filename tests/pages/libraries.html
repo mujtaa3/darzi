@@ -7,7 +7,9 @@
   window.__log = [];
   const log = (s) => window.__log.push(s);
 
-  const chartSrc = await fetch("/app/vendor/chart.umd.js").then((r) => r.text());
+  // Chart.js 4.5.1: dist/chart.umd.js from the chart.js npm package, copied in.
+  // The suite keeps its own copy, so no app is needed to run it.
+  const chartSrc = await fetch("/tests/fixtures/chart.umd.js").then((r) => r.text());
   // A library whose source contains the closing script tag inside a string.
   // Assembled by concatenation so THIS page's script is not ended by it.
   const trapSrc = 'window.TRAP = "safe</scr' + 'ipt>still-safe";';

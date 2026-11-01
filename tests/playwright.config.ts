@@ -28,7 +28,8 @@ export default defineConfig({
   },
   webServer: {
     // Build first: running Playwright directly must never test a stale dist/.
-    command: "npm run build && node server.js",
+    // tests/server.js serves only tests/ and dist/: the pages and the built runtime.
+    command: "npm run build && node tests/server.js",
     cwd: REPO,
     // Readiness is one of OUR pages answering, not just "something holds the port".
     url: "http://127.0.0.1:8009/tests/pages/identity.html",
