@@ -38,7 +38,7 @@ test("faults arrive clamped, positioned in the widget's own lines, and never aft
   const muted = test.info().project.name === "webkit";
 
   // Each widget's last expected sign of life, then a settle for anything in flight.
-  for (const id of ["typeerror", "rejection", "oversize", "syntax", "click", "library", "library-caller", "after-destroy-control"]) {
+  for (const id of ["typeerror", "rejection", "oversize", "syntax", "click", "line-separator", "library", "library-caller", "after-destroy-control"]) {
     await attack.untilLog(`"widgetId":"${id}"`);
   }
   await attack.untilLog("forged-extra");
@@ -80,6 +80,8 @@ test("faults arrive clamped, positioned in the widget's own lines, and never aft
   thrown("syntax", "", "SyntaxError", 3);
   // A listener that throws long after load.
   thrown("click", "from-click", "Error", 4);
+  // A throw on line 3, reported as line 4, because of the U+2028 on line 2.
+  thrown("line-separator", "after-separator", "Error", 4);
   // Thrown inside a library: the position lies in the host's part of the
   // document, so none is reported …
   thrown("library", "from-lib", "Error", undefined);

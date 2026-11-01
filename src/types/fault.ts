@@ -42,7 +42,9 @@ export interface WidgetFault {
    * `script-error` only: the line where the error was thrown, counted from line
    * 1 of the HTML given to `render`. Absent for a failed promise, and for a
    * position outside the widget HTML, for example in a vendored library. The
-   * widget reports this line, so it is a claim, not a measurement.
+   * widget reports this line, so it is a claim, not a measurement. It is one too
+   * high for each U+2028 or U+2029 earlier in the script, because JavaScript
+   * counts these as line breaks and HTML does not (tested).
    */
   line?: number;
   /** `script-error` only: the column on `line`, counted from 1. Present only with `line`. */

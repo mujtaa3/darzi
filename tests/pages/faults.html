@@ -71,6 +71,13 @@
     'document.getElementById("b").click();',
     "<\/script>"));
 
+  // JavaScript counts U+2028 as a line break, and HTML does not.
+  render("line-separator", lines(
+    "<script>",
+    'var text = "a\u2028b";',
+    'throw new Error("after-separator");',
+    "<\/script>"));
+
   // Thrown inside the library's text: the position is not the widget's.
   render("library", lines("<script>LIB.explode();<\/script>"), ["lib"]);
   // Thrown by widget code that a library called back into: body line 2.
