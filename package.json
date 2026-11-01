@@ -36,6 +36,7 @@
     "build": "node scripts/stub.mjs && tsc",
     "watch": "node scripts/stub.mjs && tsc --watch",
     "clean": "rm -rf dist",
+    "prepack": "npm run clean && npm run build",
     "test": "playwright test -c tests/playwright.config.ts"
   },
   "devDependencies": {
