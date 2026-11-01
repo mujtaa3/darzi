@@ -24,12 +24,18 @@ test("a widget's frames have no device features, and show no referrer", async ({
   const [attrs] = await attack.logged("ATTRS ");
   expect(JSON.parse(attrs!)).toEqual({ outer: SETTINGS, inner: SETTINGS });
 
-  const widget = JSON.parse((await attack.logged("WIDGET "))[0]!) as { referrer: string; geolocation: string };
-  const control = JSON.parse((await attack.logged("CONTROL "))[0]!) as { referrer: string; geolocation: string };
+  type Seen = { referrer: string; geolocation: string; compiled: unknown };
+  const widget = JSON.parse((await attack.logged("WIDGET "))[0]!) as Seen;
+  const control = JSON.parse((await attack.logged("CONTROL "))[0]!) as Seen;
   // Control: the browser gives a location to a frame that may have one.
   expect(control.geolocation, "the control's location").toBe("allowed");
   // Code 1 is PERMISSION_DENIED.
   expect(widget.geolocation, "the widget's location").toBe("refused 1");
+
+  // The widget's CSP has no 'unsafe-eval' or 'wasm-unsafe-eval'. The README and the
+  // templates say so, because a vendored library may need them.
+  expect(control.compiled, "the control compiles").toEqual({ eval: "2", fn: "2", wasm: "compiled" });
+  expect(widget.compiled, "the widget does not").toEqual({ eval: "EvalError", fn: "EvalError", wasm: "CompileError" });
 
   // TESTED 2026-10-31: Firefox gives any srcdoc frame an empty referrer, so there
   // only the attribute check above means something.

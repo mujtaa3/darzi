@@ -9,7 +9,14 @@
 
   // One script for the widget and the control: what can this document learn?
   const probe = (report) => `
-    function done(geolocation) { var out = { referrer: document.referrer, geolocation: geolocation }; ${report}; }
+    function compiled() {
+      var out = {};
+      try { out.eval = String(eval("1 + 1")); } catch (e) { out.eval = e.name; }
+      try { out.fn = String(new Function("return 2")()); } catch (e) { out.fn = e.name; }
+      try { new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0])); out.wasm = "compiled"; } catch (e) { out.wasm = e.name; }
+      return out;
+    }
+    function done(geolocation) { var out = { referrer: document.referrer, geolocation: geolocation, compiled: compiled() }; ${report}; }
     navigator.geolocation.getCurrentPosition(
       function () { done("allowed"); },
       function (e) { done("refused " + e.code); },

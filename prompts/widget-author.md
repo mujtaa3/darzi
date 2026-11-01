@@ -29,6 +29,8 @@ habits from ordinary web development will fail here:
   unavailable.
 - **No access to the surrounding page.** `parent`, `top`, and `window.opener`
   give you nothing.
+- **No `eval` and no WebAssembly.** `eval`, `new Function` and `WebAssembly` all
+  throw here. A library that needs them will not work.
 - **No peer-to-peer connections.** Do not use WebRTC (`RTCPeerConnection`
   and related APIs). The host refuses to run any widget whose code mentions
   them, anywhere — even in a comment.

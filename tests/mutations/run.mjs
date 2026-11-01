@@ -51,6 +51,8 @@ const MUTATIONS = [
   { name: "sandbox-allows-downloads", spec: "escapes", staysGreen: true, edits: [SANDBOX_ADDS("allow-downloads")] },
   { name: "sandbox-allows-modals", spec: "escapes", edits: [SANDBOX_ADDS("allow-modals")] },
   { name: "frame-allows-geolocation", spec: "frame-settings", edits: [[JAIL, `FRAME_ALLOW = "";`, `FRAME_ALLOW = "geolocation *";`]] },
+  { name: "csp-allows-eval", spec: "frame-settings", edits: [
+    [JAIL, `"script-src 'unsafe-inline'", // the model writes its JS inline; no remote scripts`, `"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",`]] },
   { name: "referrer-policy-opened", spec: "frame-settings", edits: [[JAIL, `FRAME_REFERRER_POLICY = "no-referrer";`, `FRAME_REFERRER_POLICY = "unsafe-url";`]] },
   { name: "no-never-started-fault", spec: "handshake-edges", edits: [
     [RUNTIME, `reportFault({ widgetId: id, kind: "never-started", message: "widget did not complete its handshake" });`, ""]] },

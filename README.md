@@ -166,7 +166,9 @@ To use a library such as a charting library, put a copy of its source code in
 your app. Give that source code to marzi in the `libraries` option. marzi adds
 the source code to the widget's frame as an inline script, because the frame can
 never fetch it. A widget gets only the libraries that `libs` names. `render`
-throws for a name that you did not register.
+throws for a name that you did not register. A library that uses `eval`,
+`new Function` or WebAssembly fails in a widget, because the widget's CSP blocks
+them.
 
 ## What marzi promises and does not promise
 
