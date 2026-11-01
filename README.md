@@ -176,7 +176,9 @@ marzi does not promise these things:
 - *Imitation.* A widget can draw anything inside its box, for example a false
   login form. Draw a clear border around each widget, so that users can see where
   your app stops. The quick start shows one way.
-- No CPU or memory isolation.
+- No CPU or memory isolation. A widget can slow your page, for example with a
+  very large message, because the browser copies a message before marzi can check
+  its size.
 - Nothing checks that a widget's *numbers* are correct.
 
 To catch the obvious WebRTC case, `render` refuses widget HTML that contains a
