@@ -67,6 +67,23 @@ controls: the warden. The warden contains no scripts. Its CSP
        your existing API, your session
 ```
 
+## When not to use marzi
+
+Do not use marzi 0.1.0 if one of these is true:
+
+- **A widget's data must not leave the browser.** A widget may send data out
+  through WebRTC. You can close this path only in Chrome and Edge 152 or later (see
+  [Known residual risks](#known-residual-risks)).
+- **Every page must keep a strict script CSP.** A page that shows widgets must allow
+  inline scripts, so it loses a main defense against XSS (see
+  [Your page's CSP](#your-pages-csp)).
+- **Widgets need different authority, and each cannot have its own runtime.** marzi
+  does not enforce per-widget grants in 0.1.0 (see
+  [Who decides what a widget may call](#who-decides-what-a-widget-may-call)).
+- **You only need simple views.** If a chart or a filter is enough, let the model
+  return a small spec, and draw it with your own components. No model code then
+  runs, so nothing needs a jail.
+
 ## Who decides what a widget may call
 
 In 0.1.0, **registering a capability is the authorization.** Every widget can
