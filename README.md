@@ -326,17 +326,17 @@ error that widget code throws: the message is "Script error." and there is no
 position. A failed promise keeps its message in all three browsers.
 
 When your capability handler throws, the audit log records the call as refused,
-with the reason `capability failed`. marzi records it before it sends the error
-to the widget. Thus your page can tell a failure in your handler from an error
-in the widget.
+with the reason `capability failed`. marzi records it, then gives the widget only
+that fixed text. The real error goes to your console. To show the widget a reason,
+such as bad params, return it as a value and do not throw.
 
 **To repair a widget with your model:**
 
 1. Show a Repair button for a `script-error` fault.
 2. Do not show the button if the audit log recorded one of these reasons for
    that widget just before the fault: `capability failed`, `state operation
-   failed`, `timed out` or `result not cloneable`. Each one is a failure in your
-   code, not in the widget.
+   failed`, `timed out` or `result not cloneable`. Each one usually means a failure
+   in your code, not in the widget.
 3. When the user clicks the button, take the text of `prompts/widget-repair.md`
    after its `---` line, and fill it in with the widget HTML and the fault.
 4. Send the result to your model.
