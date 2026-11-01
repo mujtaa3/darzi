@@ -66,6 +66,17 @@ controls: the warden. The warden contains no scripts. Its CSP
        your existing API, your session
 ```
 
+## Who decides what a widget may call
+
+In 0.1.0, **registering a capability is the authorization.** Every widget can
+call every capability that you give to `createRuntime`. Register capabilities
+as you would make a public API. Register a capability only if it is safe for
+*any* widget to call it. A capability's `description` does not limit what a
+widget can do. Only the validation in your handler limits it.
+
+Per-widget grants are designed for the next release, with a new approval when a
+refinement asks for more capabilities, and a read/write switch.
+
 ## Quick start
 
 ```bash
@@ -131,21 +142,6 @@ To use a library such as a charting library, put a copy of its source code in
 your app. Give that source code to marzi in the `libraries` option. marzi adds
 the source code to the widget's frame as an inline script, because the frame can
 never fetch it.
-
-## Who decides what a widget may call
-
-In 0.1.0, **registering a capability is the authorization.** Every widget can
-call every capability that you give to `createRuntime`. Register capabilities
-as you would make a public API. Register a capability only if it is safe for
-*any* widget to call it. A capability's `description` does not limit what a
-widget can do. Only the validation in your handler limits it.
-
-These features are designed for the next release:
-
-- Per-widget grants.
-- A new approval when a refinement (a new version of a widget) asks for more
-  capabilities.
-- A read/write switch.
 
 ## What marzi promises and does not promise
 
