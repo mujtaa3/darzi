@@ -100,6 +100,7 @@ const runtime = createRuntime({
 
 const widget = runtime.render(htmlTheModelWrote, document.getElementById("slot"));
 widget.frame.style.height = "320px";   // the outer frame is yours to size
+widget.frame.style.border = "1px solid #ccc";   // shows users where your app stops
 // later:
 widget.destroy();
 ```
@@ -168,6 +169,9 @@ marzi does not promise these things:
   frames, at any size, and the rate limit does not count these messages. Each
   `message` listener on your page, also in third-party scripts, must check
   `event.source` or `event.origin`. A widget's origin is `"null"`.
+- *Imitation.* A widget can draw anything inside its box, for example a false
+  login form. Draw a clear border around each widget, so that users can see where
+  your app stops. The quick start shows one way.
 - No CPU or memory isolation.
 - Nothing checks that a widget's *numbers* are correct.
 
