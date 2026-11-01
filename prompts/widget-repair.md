@@ -30,8 +30,9 @@ How a host fills it:
   Leave out the `Error` line when `name` is absent. When `line` is absent,
   write `Where: not reported`.
 - Offer a repair only for `script-error` faults. A `never-started` fault is
-  not the widget's code, and a call that the audit shows as refused with
-  "capability failed" is the host's own failure.
+  not the widget's code. A call that the audit shows as refused with "capability
+  failed", "state operation failed", "timed out" or "result not cloneable" is the
+  host's own failure.
 
 Environment rules are duplicated from widget-author.md on purpose (templates
 are standalone artifacts). If the runtime changes, change all three.

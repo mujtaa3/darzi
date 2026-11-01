@@ -305,8 +305,10 @@ in the widget.
 **To repair a widget with your model:**
 
 1. Show a Repair button for a `script-error` fault.
-2. Do not show the button if the audit log recorded `capability failed` for
-   that widget just before the fault.
+2. Do not show the button if the audit log recorded one of these reasons for
+   that widget just before the fault: `capability failed`, `state operation
+   failed`, `timed out` or `result not cloneable`. Each one is a failure in your
+   code, not in the widget.
 3. When the user clicks the button, fill in `prompts/widget-repair.md` with the
    widget HTML and the fault.
 4. Send the result to your model.
