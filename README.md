@@ -369,7 +369,9 @@ npm test                                 # build, then every attack in three bro
 ```
 
 In the attack suite, hostile widgets try to escape the jail, leak data, and do
-more than marzi allows. The attacks are in `tests/attacks/`. Each test that
+more than marzi allows. The attacks are in
+[`tests/attacks/`](https://github.com/mujtaa3/marzi/tree/main/tests/attacks) in the
+repo. They are not in the npm package, so run them from a clone. Each test that
 expects an attack to fail has a positive control. The control runs the same
 attack without the defense and expects it to succeed.
 
