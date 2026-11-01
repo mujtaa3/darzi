@@ -15,6 +15,15 @@
     "security"
   ],
   "license": "MIT",
+  "author": "Ahmed Mujtaba",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mujtaa3/marzi.git"
+  },
+  "homepage": "https://github.com/mujtaa3/marzi#readme",
+  "bugs": {
+    "url": "https://github.com/mujtaa3/marzi/issues"
+  },
   "private": true,
   "type": "module",
   "sideEffects": false,
