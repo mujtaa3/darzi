@@ -98,11 +98,11 @@ const runtime = createRuntime({
     handler: (params, { signal }) =>
       fetch("/api/transactions", { signal }).then((r) => r.json()),
   }],
-  store: memoryStore(),            // where marzi.saveState lands; implement yours over your backend
+  store: memoryStore(),            // for demos: it empties on a reload; implement yours over your backend
   onAudit: (e) => console.log(e),  // dispatched and refused calls
 });
 
-const widget = runtime.render(htmlTheModelWrote, document.getElementById("slot"));
+const widget = runtime.render(htmlTheModelWrote, document.getElementById("slot"), { id: savedWidgetId });
 widget.frame.style.height = "320px";   // the outer frame is yours to size
 widget.frame.style.border = "1px solid #ccc";   // shows users where your app stops
 // later:
@@ -130,6 +130,10 @@ In the widget, the model's code gets one object, `marzi`:
 `marzi.call(name, params)` returns a promise. `marzi.saveState(value)` and
 `marzi.loadState()` save and load one small JSON value for each saved widget.
 These three methods are the full in-frame API.
+
+marzi saves a widget's state, not the widget. Your app saves the widget HTML, and
+renders it again with the same `id`. `memoryStore()` empties on a reload, so a real
+app implements `getState` and `putState` over its backend.
 
 The store finds this value by the `id` that you give to `render`. So give each
 saved widget an `id` that is unique across all your users. A backend store must
