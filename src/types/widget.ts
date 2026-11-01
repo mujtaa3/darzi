@@ -49,6 +49,9 @@ export interface RenderOptions {
    * keys saved state by this id. So a saved widget that renders with its
    * record id gets its state back. Without an id, the runtime makes a new one,
    * and the widget is temporary.
+   *
+   * Make it unique across all your users, because the store finds state by this
+   * id. A backend store must also check that the signed-in user owns it.
    */
   id?: string;
 }

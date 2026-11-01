@@ -127,6 +127,10 @@ In the widget, the model's code gets one object, `marzi`:
 `marzi.loadState()` save and load one small JSON value for each saved widget.
 These three methods are the full in-frame API.
 
+The store finds this value by the `id` that you give to `render`. So give each
+saved widget an `id` that is unique across all your users. A backend store must
+also check that the signed-in user owns that `id`.
+
 **Getting the HTML.** marzi never calls a model. Your app calls the model:
 
 1. Replace the placeholders in `prompts/widget-author.md` (or
