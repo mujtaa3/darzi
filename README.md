@@ -173,6 +173,10 @@ marzi does not promise these things:
   frames, at any size, and the rate limit does not count these messages. Each
   `message` listener on your page, also in third-party scripts, must check
   `event.source` or `event.origin`. A widget's origin is `"null"`.
+- *Facts about your page.* In Chrome and WebKit, a widget can read your page's
+  origin from `location.ancestorOrigins`. In each browser tested, it can read
+  `history.length` and `top.length`. Tests found no way to read your URL's path
+  or query.
 - *Imitation.* A widget can draw anything inside its box, for example a false
   login form. Draw a clear border around each widget, so that users can see where
   your app stops. The quick start shows one way.
