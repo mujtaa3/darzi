@@ -4,6 +4,8 @@
 <div id="slot"></div>
 <!-- This stands for a script that an XSS bug put on the page. -->
 <script>window.__injected = "ran";</script>
+<!-- This stands for an inline handler that an XSS bug put on the page. -->
+<img src="data:x" onerror="window.__injectedHandler = 'ran'">
 <!-- A file, not inline: so this page runs under the policies that block inline script. -->
 <script type="module" src="/tests/pages/host-csp.js"></script>
 </body></html>

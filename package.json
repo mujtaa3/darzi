@@ -24,7 +24,6 @@
   "bugs": {
     "url": "https://github.com/mujtaa3/marzi/issues"
   },
-  "private": true,
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -39,7 +38,8 @@
   "files": [
     "dist",
     "src",
-    "prompts"
+    "prompts",
+    "QUICKSTART.md"
   ],
   "scripts": {
     "build": "node scripts/stub.mjs && tsc",

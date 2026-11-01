@@ -27,15 +27,21 @@ habits from ordinary web development will fail here:
   will not load.
 - **No storage.** `localStorage` and `sessionStorage` throw. Cookies are
   unavailable.
-- **No access to the surrounding page.** `parent`, `top`, and `window.opener`
-  give you nothing.
+- **No access to the surrounding page.** Do not use `parent`, `top`, or
+  `window.opener`.
+- **Keep your variables inside a function.** A top-level `var status` or
+  `var name` is a property of `window`. It holds only text, and your code fails
+  with no error.
+- **No inline event handlers.** Use `addEventListener`, not `onclick=`
+  attributes. A host's security policy may block them.
 - **No `eval` and no WebAssembly.** `eval`, `new Function` and `WebAssembly` all
   throw here. A library that needs them will not work.
 - **No peer-to-peer connections.** Do not use WebRTC (`RTCPeerConnection`
   and related APIs). The host refuses to run any widget whose code mentions
   them, anywhere — even in a comment.
 - **No dialogs or navigation.** `alert`, `confirm`, `prompt`, `window.open`,
-  form submission, and changing `location` are all unavailable or useless.
+  form submission, and changing `location` are all unavailable or useless. A
+  link that leaves the widget, or a change of `location`, turns the widget blank.
 
 What you *do* have: plain HTML, inline `<style>`, inline `<script>`, the DOM,
 inline SVG, `<canvas>`, and everything built into JavaScript. That is enough to
@@ -126,7 +132,7 @@ markdown fences:
 7. **Plain, legible styling.** System fonts (`system-ui, sans-serif`), readable
    sizes, sensible spacing. Assume a light background unless told otherwise.
 8. **Say what you cannot do.** If the request needs something you don't have —
-   a capability that isn't listed, or storage that survives a reload — build the
+   a capability that isn't listed, or data that no capability gives — build the
    most useful version you can and state the limitation on screen, briefly and
    in plain language. Never fake it, never invent a capability name, and never
    declare a capability you don't call.

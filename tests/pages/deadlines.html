@@ -67,7 +67,7 @@
         .render(settled("hang", 'marzi.call("probe.hang", { tag: "hang" })'), slot, { id: "wid" });
     },
 
-    // The way the README tells a handler to use the signal. The route never answers.
+    // The way the quick start tells a handler to use the signal. The route never answers.
     fetch() {
       const viaFetch = { name: "probe.fetch", description: "a fetch that never answers",
         handler: (p, { signal }) => fetch("/hang-forever", { signal }).then((r) => r.json()).catch((e) => {

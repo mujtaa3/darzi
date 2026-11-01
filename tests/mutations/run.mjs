@@ -54,6 +54,8 @@ const MUTATIONS = [
   { name: "csp-allows-eval", spec: "frame-settings", edits: [
     [JAIL, `"script-src 'unsafe-inline'", // the model writes its JS inline; no remote scripts`, `"script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",`]] },
   { name: "referrer-policy-opened", spec: "frame-settings", edits: [[JAIL, `FRAME_REFERRER_POLICY = "no-referrer";`, `FRAME_REFERRER_POLICY = "unsafe-url";`]] },
+  { name: "handler-trusts-claimed-id", spec: "handshake-edges", edits: [
+    [RUNTIME, "{ signal, widgetId: widget.id })", "{ signal, widgetId: String((raw as { widgetId?: unknown }).widgetId ?? widget.id) })"]] },
   { name: "no-never-started-fault", spec: "handshake-edges", edits: [
     [RUNTIME, `reportFault({ widgetId: id, kind: "never-started", message: "widget did not complete its handshake" });`, ""]] },
   { name: "start-timeout-ignored", spec: "handshake-edges", edits: [
@@ -87,7 +89,7 @@ const MUTATIONS = [
   { name: "state-deadline-too-long", spec: "deadlines", edits: [
     [RUNTIME, "request.params, callSignal(widget));", "request.params, deadlineSignal(widget.lifetime.signal, (options.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS) * 10));"]] },
   { name: "runtime-waits-for-handler", spec: "deadlines", edits: [
-    [RUNTIME, "await untilAborted(\n        Promise.resolve(capability.handler(params.value, { signal })),\n        signal,\n      );", "await Promise.resolve(capability.handler(params.value, { signal }));"]] },
+    [RUNTIME, "await untilAborted(\n        Promise.resolve(capability.handler(params.value, { signal, widgetId: widget.id })),\n        signal,\n      );", "await Promise.resolve(capability.handler(params.value, { signal, widgetId: widget.id }));"]] },
   { name: "answered-call-keeps-listener", spec: "deadlines", edits: [
     [HELPERS, "settled.then(removeListener, removeListener);", ""]] },
   { name: "work-not-made-a-promise", spec: "deadlines", edits: [

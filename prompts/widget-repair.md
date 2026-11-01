@@ -31,8 +31,8 @@ How a host fills it:
   write `Where: not reported`.
 - Offer a repair only for `script-error` faults. A `never-started` fault is
   not the widget's code. A call that the audit shows as refused with "capability
-  failed", "state operation failed", "timed out" or "result not cloneable" is the
-  host's own failure.
+  failed", "state operation failed", "timed out" or "result not cloneable" is
+  usually the host's own failure.
 
 Environment rules are duplicated from widget-author.md on purpose (templates
 are standalone artifacts). If the runtime changes, change all three.
@@ -53,7 +53,13 @@ development will fail here:
 - **No external resources.** No `<script src>`, no stylesheets, fonts, or
   images from anywhere. No CDNs.
 - **No storage.** `localStorage` and `sessionStorage` throw; no cookies.
-- **No access to the surrounding page**, no dialogs, no navigation.
+- **No access to the surrounding page**, no dialogs, no navigation. A link that
+  leaves the widget, or a change of `location`, turns the widget blank.
+- **Keep your variables inside a function.** A top-level `var status` or
+  `var name` is a property of `window`. It holds only text, and your code fails
+  with no error.
+- **No inline event handlers.** Use `addEventListener`, not `onclick=`
+  attributes. A host's security policy may block them.
 - **No `eval` and no WebAssembly.** `eval`, `new Function` and `WebAssembly` all
   throw here. A library that needs them will not work.
 - **No peer-to-peer connections.** Do not use WebRTC (`RTCPeerConnection`

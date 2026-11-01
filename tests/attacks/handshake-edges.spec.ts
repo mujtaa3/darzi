@@ -68,8 +68,12 @@ test("a claimed id changes nothing on a call, a refusal, or saved state", async 
   expect(audits, "the refusal").toContain("no.such refused · no such capability");
   expect(audits, "the state call").toContain("marzi/saveState dispatched");
   expect(await attack.logged("PUT "), "the store's key").toEqual(["claimer"]);
-  // In params, the claim is only data. The handler gets no widget id from it.
+  // In params, the claim is only data.
   expect((await attack.reports()).find((r) => r.tag === "claimed")?.widgetId).toBe("other");
+  // The handler's own widgetId comes from the port, also for the call that claims another.
+  expect(await attack.logged("CALLER "), "the id that each handler got").toEqual(expect.arrayContaining([
+    "other-ready other", "claimer-ready claimer", "claimed claimer", "claimer-done claimer",
+  ]));
 });
 
 test("a widget that never connects is reported at startTimeoutMs, and only that widget", async ({ page }) => {
@@ -84,4 +88,14 @@ test("a widget that never connects is reported at startTimeoutMs, and only that 
   expect(fault, "not before startTimeoutMs").toBeGreaterThan(log.indexOf("BEFORE-THE-TIMEOUT"));
   expect(fault, "not after startTimeoutMs").toBeLessThan(log.indexOf("AFTER-THE-TIMEOUT"));
   expect(await attack.logged("FAULT "), "only the orphan").toEqual(["orphan never-started"]);
+});
+
+test("a widget can call only what its own runtime registered", async ({ page }) => {
+  const attack = await openAttack(page, "handshake-edges?probe=separate-runtimes");
+  await attack.untilLog('"tag":"writer-done"');
+  await attack.untilLog('"tag":"reader-done"');
+
+  expect((await attack.log()).filter((l) => l === "WRITE-RAN"), "only the writer's call").toHaveLength(1);
+  expect(String((await attack.reports()).find((r) => r["tag"] === "reader-done")?.["result"])).toContain("no such capability");
+  expect(await attack.logged("AUDIT reader "), "the refusal").toContain("probe.write refused · no such capability");
 });

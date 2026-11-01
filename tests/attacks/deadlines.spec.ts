@@ -82,7 +82,7 @@ for (const mode of ["as it is", "without the new functions"] as const) {
       expect(await attack.logged("AUDIT wid probe.hang")).toEqual([" dispatched", " refused · timed out"]);
     });
 
-    test("the signal stops a fetch, as the README shows", async ({ page }) => {
+    test("the signal stops a fetch, as the quick start shows", async ({ page }) => {
       // This route never answers, so only the signal can end the fetch.
       await page.route("**/hang-forever", () => {});
       const attack = await open(page, "fetch");

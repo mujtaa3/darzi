@@ -15,6 +15,12 @@ export interface CallContext {
    * the widget.
    */
   signal: AbortSignal;
+  /**
+   * The id of the widget that made this call. The runtime takes it from the port
+   * that the call came on, never from the message, so a widget cannot claim another
+   * id. Use it to say which widget is asking, for example in a confirmation dialog.
+   */
+  widgetId: string;
 }
 
 /**

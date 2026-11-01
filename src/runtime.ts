@@ -428,7 +428,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     try {
       // Promise.resolve lets a handler return a plain value or a promise.
       const outcome = await untilAborted(
-        Promise.resolve(capability.handler(params.value, { signal })),
+        Promise.resolve(capability.handler(params.value, { signal, widgetId: widget.id })),
         signal,
       );
 
@@ -656,7 +656,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     //
     // The timer starts when `render` runs, but a frame loads only when it is in
     // the page. So if the host attaches the container after `startTimeoutMs`,
-    // the widget never connects. The README tells the host to attach it first.
+    // the widget never connects. QUICKSTART.md tells the host to attach it first.
     const startTimer = setTimeout(() => {
       // A port means that the widget connected.
       if (widget.port !== null) return;

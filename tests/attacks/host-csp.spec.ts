@@ -19,12 +19,17 @@ const NO_START = [
   "script-src 'self' 'sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' 'unsafe-inline'",
 ];
 // These policies let the widget start, and take one thing from it.
-const STARTS: Array<[string, { color?: string; notColor?: string; image: string }]> = [
+const STARTS: Array<[string, { color?: string; notColor?: string; image: string; handlers?: string }]> = [
   // Control: with no limit, the widget has all three.
   ["script-src 'self' 'unsafe-inline'", { color: STYLED, image: "loaded" }],
   ["script-src 'self' 'unsafe-inline'; style-src 'self'", { notColor: STYLED, image: "loaded" }],
   ["script-src 'self' 'unsafe-inline'; img-src 'self'", { color: STYLED, image: "failed" }],
+  // The narrowest policy in the README: inline elements run, and inline handlers do not.
+  ["script-src 'self'; script-src-elem 'self' 'unsafe-inline'; script-src-attr 'none'", { color: STYLED, image: "loaded", handlers: "blocked" }],
 ];
+
+const injectedHandler = (page: import("@playwright/test").Page) =>
+  page.evaluate(() => (window as unknown as { __injectedHandler?: string }).__injectedHandler ?? "blocked");
 
 async function openUnder(page: import("@playwright/test").Page, policy: string) {
   await page.route("**/tests/pages/host-csp.html", async (route) => {
@@ -51,6 +56,7 @@ for (const policy of NO_START) {
     await attack.untilLog("FAULT w never-started");
     expect(await attack.reports(), "no script of the widget ran").toEqual([]);
     expect(await attack.logged("INJECTED "), "the page keeps its defence against XSS").toEqual(["blocked"]);
+    expect(await injectedHandler(page), "an injected onerror").toBe("blocked");
   });
 }
 
@@ -65,5 +71,7 @@ for (const [policy, want] of STARTS) {
     expect(await attack.logged("FAULT "), "faults").toEqual([]);
     // The cost that the README states: the page that lets a widget start has lost this.
     expect(await attack.logged("INJECTED "), "a script that an XSS bug injected").toEqual(["ran"]);
+    expect(await injectedHandler(page), "an injected onerror").toBe(want.handlers ?? "ran");
+    expect(seen?.handler, "an inline handler in the widget").toBe(want.handlers ?? "ran");
   });
 }
