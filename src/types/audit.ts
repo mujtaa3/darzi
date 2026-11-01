@@ -34,7 +34,10 @@ export interface AuditEvent {
    * The runtime records the refusal before it tells the widget.
    */
   decision: "dispatched" | "refused";
-  /** Why the call was refused. Present only on refusals. Safe to show a developer, not a widget. */
+  /**
+   * Why the call was refused. Present only on refusals. Safe to show a developer,
+   * not a widget. The README names the reasons that stay the same until 1.0.
+   */
   reason?: string;
   /** The marzi `VERSION` that made the decision, so that old log entries stay clear after an upgrade. */
   version: string;

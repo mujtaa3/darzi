@@ -317,6 +317,8 @@ in the widget.
 5. Split the reply as in "Getting the HTML", and render it as the next version
    of the widget.
 
+The reasons in step 2 stay the same until 1.0. Other reasons may change.
+
 The header of the template tells you how to write the fault into the prompt.
 Let the user start each repair. A widget can fail many times, and each repair
 is a call to your model.
