@@ -55,6 +55,9 @@ development will fail here:
 - **No storage.** `localStorage` and `sessionStorage` throw; no cookies.
 - **No access to the surrounding page**, no dialogs, no navigation. A link that
   leaves the widget, or a change of `location`, turns the widget blank.
+- **Keep your variables inside a function.** A top-level `var status` or
+  `var name` is a property of `window`. It holds only text, and your code fails
+  with no error.
 - **No inline event handlers.** Use `addEventListener`, not `onclick=`
   attributes. A host's security policy may block them.
 - **No `eval` and no WebAssembly.** `eval`, `new Function` and `WebAssembly` all

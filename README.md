@@ -203,7 +203,9 @@ model knows only what you write there.
 
 The templates teach the model the rules of the jail. All three templates are in
 the package. On a server, find a template with
-`import.meta.resolve("marzi/prompts/widget-author.md")`, then read the file.
+`import.meta.resolve("marzi/prompts/widget-author.md")`, then read the file. In a
+browser bundle, import the file as text, for example with Vite's
+`marzi/prompts/widget-author.md?raw`.
 
 To use a library such as a charting library, put a copy of its source code in
 your app. Give that source code to marzi in the `libraries` option. marzi adds
@@ -284,7 +286,8 @@ parent's CSP. Thus your page's CSP applies to every marzi frame.
 
 If your CSP blocks inline scripts, no widget starts, and `onWidgetFault`
 reports `never-started`. These CSPs block inline scripts: `script-src 'self'`,
-`default-src 'self'`, and any nonce or hash policy. If a CSP directive has a
+`default-src 'self'`, and any nonce or hash policy, because a widget's script is
+different each time. If a CSP directive has a
 nonce, the browser ignores `'unsafe-inline'` in that directive. A `style-src`
 limit removes widget styles, and an `img-src` limit removes widget `data:`
 images. A page with `require-trusted-types-for 'script'` cannot show widgets,

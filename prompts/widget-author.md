@@ -29,6 +29,9 @@ habits from ordinary web development will fail here:
   unavailable.
 - **No access to the surrounding page.** Do not use `parent`, `top`, or
   `window.opener`.
+- **Keep your variables inside a function.** A top-level `var status` or
+  `var name` is a property of `window`. It holds only text, and your code fails
+  with no error.
 - **No inline event handlers.** Use `addEventListener`, not `onclick=`
   attributes. A host's security policy may block them.
 - **No `eval` and no WebAssembly.** `eval`, `new Function` and `WebAssembly` all
