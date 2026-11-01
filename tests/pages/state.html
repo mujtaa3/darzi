@@ -52,6 +52,13 @@
     catch (e) { await marzi.call("probe.report", { tag: "euro-under", err: e.message }); }`, "wid-E");
   await waitFor("euro-under"); w.destroy();
 
+  // State goes through JSON, as the templates tell the model.
+  w = run(`
+    await marzi.saveState({ when: new Date(0), nothing: NaN });
+    var back = await marzi.loadState();
+    await marzi.call("probe.report", { tag: "json-round-trip", when: back.when, nothing: back.nothing });`, "wid-J");
+  await waitFor("json-round-trip"); w.destroy();
+
   // The option sets the limit, in both directions. A JSON string has two quotes,
   // so 198 "x" are exactly 200 bytes. The default limit would refuse the large save.
   const tiny = createRuntime({ ...options, store: memoryStore(), stateLimitBytes: 200 });

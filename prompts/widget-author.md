@@ -65,8 +65,9 @@ marzi.saveState({ budget: 500 });             // replaces the whole slot
 
 - Use it for **user-chosen settings** — a budget, a threshold, a preferred
   view. Not for caching capability data: fetch data fresh each time.
-- `loadState` resolves to exactly what was saved, or `null` if nothing was.
-  Always handle the `null` first run.
+- `loadState` resolves to the saved value after a JSON round trip, or `null` if
+  nothing was saved. Save plain JSON: a `Date` comes back as a string. Always
+  handle the `null` first run.
 - Keep it small (one JSON object, well under 50 KB) — oversized saves are
   refused. Both functions return Promises and can reject; handle it.
 
@@ -99,9 +100,8 @@ markdown fences:
 ```
 
 - `<title>`: three or four words. It is shown to the user as the widget's name.
-- `<capabilities>`: exactly the ones your code calls — no more. The user is
-  asked to approve this list, so requesting extras you don't need will get your
-  widget rejected. Leave it empty if you call none.
+- `<capabilities>`: exactly the ones your code calls — no more. Leave it empty
+  if you call none.
 - `<libs>`: exactly the libraries your code uses, from the list above — no
   more, and never a name that isn't listed. Leave it empty if you use none.
 - `<widget>`: an HTML **fragment**, not a full document. No `<!doctype>`,

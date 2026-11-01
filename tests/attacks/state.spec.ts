@@ -22,6 +22,9 @@ test("saved state comes back to its own widget only, cleaned and capped", async 
   // Control: 20 000 euro signs are 60 008 bytes, inside the limit.
   expect(by["euro-under"]).toMatchObject({ saved: true });
 
+  // State goes through JSON: a Date comes back as a string, and NaN as null.
+  expect(by["json-round-trip"]).toMatchObject({ when: "1970-01-01T00:00:00.000Z", nothing: null });
+
   // The option sets the limit, in both directions.
   expect(by["at-limit"]).toMatchObject({ saved: true });
   expect(String(by["over-limit"]?.err)).toContain("state too large (201 bytes > 200)");

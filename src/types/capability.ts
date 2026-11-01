@@ -36,8 +36,7 @@ export interface Capability {
   /** The name that widgets call, for example "transactions.list". */
   name: string;
   /**
-   * A description for people and for the model. It is shown at generation time
-   * and at approval time.
+   * A description for people and for the model. It is shown at generation time.
    *
    * ⚠️ Documentation only. The description does not limit what a widget can do.
    * Only the validation in the handler limits it.

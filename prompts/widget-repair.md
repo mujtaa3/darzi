@@ -64,8 +64,9 @@ inline SVG, `<canvas>`, everything built into JavaScript — plus:
   name. Returns a Promise; rejects if refused. Only the capabilities listed
   below exist.
 - **`marzi.saveState(obj)` / `marzi.loadState()`** — one small JSON memory
-  slot that survives reloads. `loadState` resolves to what was saved, or
-  `null` on the first run. For user-chosen settings; keep it small.
+  slot that survives reloads. `loadState` resolves to the saved value after a
+  JSON round trip, or `null` on the first run. Save plain JSON: a `Date` comes
+  back as a string. For user-chosen settings; keep it small.
 
 ## Capabilities available to you
 
