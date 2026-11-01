@@ -365,6 +365,10 @@ builds are not the browsers that users install. The results:
   with no marzi.
 - In Firefox 97, a canvas call can fail in two nested sandboxed frames, also with
   no marzi. A widget that draws can then report a `script-error` fault.
+- In both WebKit builds and Firefox 97, WebAssembly compiles in a widget, because
+  these engines do not apply the CSP to it.
+- Most tests of your page's CSP could not run on these builds, because the old
+  test tool needs `eval`.
 
 Old browsers do not get security fixes. If you must rely on the jail, ask your
 users to run current versions.
