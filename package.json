@@ -39,7 +39,8 @@
   "files": [
     "dist",
     "src",
-    "prompts"
+    "prompts",
+    "QUICKSTART.md"
   ],
   "scripts": {
     "build": "node scripts/stub.mjs && tsc",

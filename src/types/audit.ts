@@ -36,7 +36,7 @@ export interface AuditEvent {
   decision: "dispatched" | "refused";
   /**
    * Why the call was refused. Present only on refusals. Safe to show a developer,
-   * not a widget. The README names the reasons that stay the same until 1.0.
+   * not a widget. QUICKSTART.md names the reasons that stay the same until 1.0.
    */
   reason?: string;
   /** The marzi `VERSION` that made the decision, so that old log entries stay clear after an upgrade. */

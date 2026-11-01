@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1020" height="590" viewBox="0 0 1020 590" role="img" aria-labelledby="t d">
+  <title id="t">How marzi contains a widget</title>
+  <desc id="d">Your page sends the user's request to your server. Your server fills a prompt template from marzi, calls your model, and returns model-generated widget HTML. Your page holds your code, the marzi runtime and your capability handlers, which call your API. One channel, with JSON-RPC 2.0 messages, crosses the trust boundary to the jail. The jail holds the warden frame and, inside it, the widget frame. The browser blocks network requests, self-navigation and access to your page. WebRTC and DNS prefetch are residual risks.</desc>
+  <defs>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; fill: #aeb6c2; }
+      .zone { font-size: 13px; font-weight: 700; letter-spacing: 1.2px; fill: #c3cad4; }
+      .title { font-size: 15px; font-weight: 650; fill: #f1f3f6; }
+      .row { fill: #e6e9ee; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; }
+      .edge { font-size: 12.5px; fill: #d6dbe2; }
+      .strong { font-size: 13px; font-weight: 700; fill: #ffffff; }
+      .box { fill: #1a1c21; stroke: #3b4048; stroke-width: 1.2; }
+      .inner { fill: #0f1115; stroke: #2a2e35; stroke-width: 1; }
+      .line { stroke: #f1f3f6; stroke-width: 1.6; fill: none; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#f1f3f6"/></marker>
+    <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="#7b8490" stroke-width="1.6"/></pattern>
+  </defs>
+
+  <rect width="1020" height="590" rx="14" fill="#0d1014"/>
+
+  <!-- Your server -->
+  <rect x="18" y="18" width="212" height="554" rx="14" fill="#141c19" stroke="#2f5f4a" stroke-width="1.4"/>
+  <text x="34" y="46" class="zone">YOUR SERVER</text>
+  <text x="34" y="66">trusted · holds the API key</text>
+  <rect x="30" y="92" width="188" height="98" rx="8" class="box"/>
+  <text x="44" y="116" class="title">generation</text>
+  <text x="44" y="138">fills a prompt template</text>
+  <text x="44" y="157">from marzi: <tspan class="mono">prompts/*.md</tspan></text>
+  <text x="44" y="176">sends it to your model</text>
+  <rect x="30" y="446" width="188" height="112" rx="8" class="box"/>
+  <text x="44" y="472" class="title">your API</text>
+  <text x="44" y="496">the endpoints that your</text>
+  <text x="44" y="516">own pages already use</text>
+
+  <!-- Your page -->
+  <g transform="translate(20 0)">
+  <rect x="312" y="18" width="294" height="554" rx="14" fill="#17202c" stroke="#2f4f7f" stroke-width="1.4"/>
+  <text x="328" y="46" class="zone">YOUR PAGE</text>
+  <text x="328" y="66">trusted · your origin, your session</text>
+  <rect x="322" y="92" width="272" height="92" rx="8" class="box"/>
+  <text x="336" y="118" class="title">your code</text>
+  <text x="336" y="142" class="mono">createRuntime({ … })</text>
+  <text x="336" y="164" class="mono">render() · onAudit · onWidgetFault</text>
+
+  <line x1="430" y1="184" x2="430" y2="222" class="line" marker-end="url(#arrow)"/>
+  <text x="440" y="208" class="mono" fill="#d6dbe2">render(html, slot)</text>
+
+  <rect x="322" y="224" width="272" height="172" rx="8" fill="#1a1c21" stroke="#4a86e0" stroke-width="1.4"/>
+  <text x="336" y="250" class="title">marzi runtime</text>
+  <rect x="334" y="262" width="248" height="36" rx="5" class="inner"/>
+  <text x="348" y="285" class="row">registry · name → handler</text>
+  <rect x="334" y="304" width="248" height="36" rx="5" class="inner"/>
+  <text x="348" y="327" class="row">switchboard · handleMessage()</text>
+  <rect x="334" y="346" width="248" height="36" rx="5" class="inner"/>
+  <text x="348" y="369" class="row">audit · faults · state</text>
+
+  <line x1="430" y1="396" x2="430" y2="444" class="line" marker-end="url(#arrow)"/>
+  <text x="440" y="416" class="mono">handler(params,</text>
+  <text x="440" y="432" class="mono">{ signal, widgetId })</text>
+
+  <rect x="322" y="446" width="272" height="112" rx="8" class="box"/>
+  <text x="336" y="472" class="title">capability handlers</text>
+  <text x="336" y="496">your code, your session</text>
+  <text x="336" y="518" class="mono">narrow params → fetch('/api/…')</text>
+
+  </g>
+
+  <!-- Between the server and the page -->
+  <line x1="342" y1="122" x2="220" y2="122" class="line" marker-end="url(#arrow)"/>
+  <text x="281" y="114" class="edge" text-anchor="middle">user request</text>
+  <line x1="220" y1="152" x2="340" y2="152" class="line" marker-end="url(#arrow)"/>
+  <text x="281" y="170" class="edge" text-anchor="middle">model-generated</text>
+  <text x="281" y="186" class="edge" text-anchor="middle">widget HTML</text>
+  <line x1="342" y1="486" x2="220" y2="486" class="line" marker-end="url(#arrow)"/>
+  <text x="281" y="478" class="edge" text-anchor="middle">fetch</text>
+  <line x1="220" y1="516" x2="340" y2="516" class="line" marker-end="url(#arrow)"/>
+  <text x="281" y="534" class="edge" text-anchor="middle">JSON</text>
+
+  <!-- The trust boundary -->
+  <g transform="translate(20 0)">
+  <text x="647" y="26" class="edge" text-anchor="middle">trust</text>
+  <text x="647" y="41" class="edge" text-anchor="middle">boundary</text>
+  <rect x="640" y="48" width="14" height="526" fill="url(#hatch)" stroke="#59616c" stroke-width="1"/>
+
+  <!-- The jail -->
+  <rect x="688" y="18" width="294" height="554" rx="14" fill="#221915" stroke="#7c4a2d" stroke-width="1.4"/>
+  <text x="704" y="46" class="zone">THE JAIL</text>
+  <text x="704" y="66">hostile by assumption</text>
+  <rect x="698" y="78" width="274" height="482" rx="9" fill="#1c1a1a" stroke="#b9642f" stroke-width="1.2"/>
+  <text x="712" y="100" class="title">warden frame</text>
+  <text x="712" y="119">no scripts · <tspan class="mono">frame-src 'none'</tspan></text>
+  <rect x="708" y="130" width="254" height="418" rx="9" fill="#191716" stroke="#e07a43" stroke-width="1.4"/>
+  <text x="722" y="152" class="title">widget frame</text>
+  <text x="722" y="172" class="mono">sandbox="allow-scripts"</text>
+  <text x="722" y="190">opaque origin</text>
+  <text x="722" y="208" class="mono">default-src 'none'</text>
+
+  <rect x="720" y="220" width="230" height="36" rx="5" class="inner"/>
+  <text x="734" y="243" class="row">stub → <tspan class="mono">window.marzi</tspan></text>
+  <rect x="720" y="262" width="230" height="36" rx="5" class="inner"/>
+  <text x="734" y="285" class="row">your vendored libraries</text>
+  <rect x="720" y="304" width="230" height="36" rx="5" fill="#43261c" stroke="#d9683a" stroke-width="1.3"/>
+  <text x="734" y="327" class="row">widget HTML, from the model</text>
+
+  <text x="722" y="370" class="row">the browser blocks</text>
+  <g fill="none" stroke="#e0524d" stroke-width="1.8">
+    <circle cx="731" cy="396" r="8"/><path d="M725.3 390.3 L736.7 401.7"/>
+    <circle cx="731" cy="428" r="8"/><path d="M725.3 422.3 L736.7 433.7"/>
+    <circle cx="731" cy="460" r="8"/><path d="M725.3 454.3 L736.7 465.7"/>
+  </g>
+  <text x="748" y="401">fetch, XHR, img, font · CSP</text>
+  <text x="748" y="433">self-navigation · warden</text>
+  <text x="748" y="465">your page, cookies · sandbox</text>
+  <line x1="722" y1="486" x2="948" y2="486" stroke="#3b3734"/>
+  <g fill="none" stroke="#e3b341" stroke-width="1.8">
+    <circle cx="731" cy="514" r="8"/><path d="M731 509 V515"/><path d="M731 518 V519.2"/>
+  </g>
+  <text x="748" y="510" fill="#e8d9b0">residual risk:</text>
+  <text x="748" y="527" fill="#e8d9b0">WebRTC, DNS prefetch</text>
+
+  <!-- The channel -->
+  <line x1="584" y1="322" x2="718" y2="322" stroke="#ffffff" stroke-width="2.6" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <rect x="603" y="290" width="88" height="23" rx="5" fill="#0d1014"/>
+  <text x="647" y="306" class="strong" text-anchor="middle">the channel</text>
+  <rect x="603" y="331" width="88" height="23" rx="5" fill="#0d1014"/>
+  <text x="647" y="347" class="edge" text-anchor="middle">JSON-RPC 2.0</text>
+  </g>
+</svg>

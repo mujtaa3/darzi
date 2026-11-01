@@ -1,5 +1,5 @@
 /**
- * Getting the HTML — the README's steps, as a host follows them (pre-publish
+ * Getting the HTML — the steps in QUICKSTART.md, as a host follows them (pre-publish
  * review SF-9, bugs.md B62).
  *
  * A template's reply has four blocks, and only the text of `<widget>` is widget
