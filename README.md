@@ -80,6 +80,9 @@ refinement asks for more capabilities, and a read/write switch.
 
 ## Quick start
 
+> **Check your CSP first.** A page that shows widgets must allow inline scripts.
+> See [Your page's CSP](#your-pages-csp).
+
 ```bash
 npm install marzi
 ```
@@ -250,7 +253,16 @@ this behavior.
 
 Pages that show widgets need a CSP that allows inline scripts and inline
 styles. If your app uses a strict CSP, give a less strict CSP only to the pages
-that show widgets.
+that show widgets. A CSP belongs to the document, so in a single-page app a route
+is not enough. The widget page must be a separate HTML document that users reach
+with a full page load.
+
+The narrowest policy that we tested allows inline `<script>` elements, and blocks
+inline event handlers such as `onerror=`, on that page and in its widgets:
+
+```
+Content-Security-Policy: script-src 'self'; script-src-elem 'self' 'unsafe-inline'; script-src-attr 'none'
+```
 
 This has a cost. A page that allows inline scripts loses a main defence against
 XSS. If your app has an XSS bug on that page, the injected script runs with your
