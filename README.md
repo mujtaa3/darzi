@@ -164,6 +164,10 @@ marzi does not promise these things:
   Your server can close it in Chrome 152 or later (see below). If a browser
   starts to obey the directive, the attack suite will show the change.
 - DNS prefetch and preconnect hints.
+- *Window messages.* A widget can call `postMessage` on your page and on other
+  frames, at any size, and the rate limit does not count these messages. Each
+  `message` listener on your page, also in third-party scripts, must check
+  `event.source` or `event.origin`. A widget's origin is `"null"`.
 - No CPU or memory isolation.
 - Nothing checks that a widget's *numbers* are correct.
 
