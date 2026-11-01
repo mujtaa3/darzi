@@ -27,8 +27,8 @@ habits from ordinary web development will fail here:
   will not load.
 - **No storage.** `localStorage` and `sessionStorage` throw. Cookies are
   unavailable.
-- **No access to the surrounding page.** `parent`, `top`, and `window.opener`
-  give you nothing.
+- **No access to the surrounding page.** Do not use `parent`, `top`, or
+  `window.opener`.
 - **No inline event handlers.** Use `addEventListener`, not `onclick=`
   attributes. A host's security policy may block them.
 - **No `eval` and no WebAssembly.** `eval`, `new Function` and `WebAssembly` all
@@ -129,7 +129,7 @@ markdown fences:
 7. **Plain, legible styling.** System fonts (`system-ui, sans-serif`), readable
    sizes, sensible spacing. Assume a light background unless told otherwise.
 8. **Say what you cannot do.** If the request needs something you don't have —
-   a capability that isn't listed, or storage that survives a reload — build the
+   a capability that isn't listed, or data that no capability gives — build the
    most useful version you can and state the limitation on screen, briefly and
    in plain language. Never fake it, never invent a capability name, and never
    declare a capability you don't call.
