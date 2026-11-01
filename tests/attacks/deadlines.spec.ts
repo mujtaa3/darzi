@@ -212,10 +212,15 @@ for (const mode of ["as it is", "without the new functions"] as const) {
   });
 }
 
-test("deadlineSignal removes its timer and its listener", async ({ page }) => {
+// The results of the page's `helper` scenario, by name.
+async function helperResults(page: Page): Promise<Record<string, unknown>> {
   const attack = await openAttack(page, "deadlines?probe=helper");
   await attack.untilLog("HELPER-DONE");
-  const results = Object.assign({}, ...(await attack.logged("RESULT ")).map((l) => JSON.parse(l))) as Record<string, unknown>;
+  return Object.assign({}, ...(await attack.logged("RESULT ")).map((l) => JSON.parse(l)));
+}
+
+test("deadlineSignal removes its timer and its listener", async ({ page }) => {
+  const results = await helperResults(page);
 
   // A parent that has ended: no timer starts, and no listener is added.
   expect(results["ended-parent"]).toEqual({ aborted: true, set: 0, live: 0, reached: 0 });
@@ -225,6 +230,34 @@ test("deadlineSignal removes its timer and its listener", async ({ page }) => {
   expect(results["deadline-first"]).toEqual({ name: "TimeoutError", afterLateAbort: "TimeoutError", set: 1, live: 0, reached: 0 });
   // 1000 calls, all past their deadlines: the parent holds no listener for them.
   expect(results["many"]).toEqual({ aborted: 1000, timedOut: 1000, set: 1000, live: 0, reached: 0 });
+});
+
+test("untilAborted removes its listener when the work settles", async ({ page }) => {
+  const results = await helperResults(page);
+  const none = { set: 0, live: 0 };
+
+  // The work answers or fails: a later abort reaches no listener of the race.
+  expect(results["race-answered"]).toEqual({ value: "answer", ...none, reached: 0 });
+  expect(results["race-failed"]).toEqual({ error: "no", ...none, reached: 0 });
+  // Control: the abort comes first, so it reaches the listener.
+  expect(results["race-abort-first"]).toEqual({ abandoned: true, ...none, reached: 1 });
+  // The work need not be a real promise, and its `then` runs only once.
+  expect(results["race-plain-value"]).toEqual({ value: "plain", ...none, reached: 0 });
+  expect(results["race-thenable"]).toEqual({ value: "lazy", thens: 1, ...none, reached: 0 });
+});
+
+// TESTED 2026-10-31, with the old code: the result stayed in Firefox 155 and WebKit
+// 26.6, and in the old builds of all three engines. Chrome 156 frees it anyway, so
+// this test cannot fail there. The test above fails in all three.
+test("an answered call's result does not stay in host memory until its deadline", async ({ page }) => {
+  const attack = await openAttack(page, "deadlines?probe=retention");
+  await attack.untilLog('"both-answered"');
+
+  type Watch = { __collect(): Promise<void>; __alive(): unknown };
+  await expect.poll(async () => {
+    await page.evaluate(() => (window as unknown as Watch).__collect());
+    return page.evaluate(() => (window as unknown as Watch).__alive());
+  }, { timeout: 15_000 }).toEqual({ unheld: false, answered: false, kept: true });
 });
 
 // This compares state and reasons, not the order of abort listeners. That order

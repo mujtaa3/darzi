@@ -86,6 +86,26 @@ const MUTATIONS = [
     [RUNTIME, "request.params, callSignal(widget));", "request.params, deadlineSignal(widget.lifetime.signal, (options.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS) * 10));"]] },
   { name: "runtime-waits-for-handler", spec: "deadlines", edits: [
     [RUNTIME, "await untilAborted(\n        Promise.resolve(capability.handler(params.value, { signal })),\n        signal,\n      );", "await Promise.resolve(capability.handler(params.value, { signal }));"]] },
+  { name: "answered-call-keeps-listener", spec: "deadlines", edits: [
+    [HELPERS, "settled.then(removeListener, removeListener);", ""]] },
+  { name: "work-not-made-a-promise", spec: "deadlines", edits: [
+    [HELPERS, "const settled = Promise.resolve(work);", "const settled = work;"]] },
+  // The tempting rewrite: settle the result in the listener, with no race.
+  { name: "abort-beats-an-answer", spec: "deadlines", edits: [
+    [HELPERS, `  return Promise.race([
+    settled,
+    // Resolves to ABANDONED when the signal aborts. \`once\` removes the listener
+    // after it fires.
+    new Promise<typeof ABANDONED>((resolve) => {
+      const onAbort`, `  return (
+    new Promise<T | typeof ABANDONED>((resolve, reject) => {
+      settled.then(resolve, reject);
+      const onAbort`],
+    [HELPERS, `      settled.then(removeListener, removeListener);
+    }),
+  ]);`, `      settled.then(removeListener, removeListener);
+    })
+  );`]] },
   // This option breaks destroy on zone.js before 0.14.3: see `deadlineSignal`.
   { name: "listener-uses-signal-option", spec: "deadlines", edits: [
     [HELPERS, `    parent.removeEventListener("abort", onParentAbort);\n`, ""],

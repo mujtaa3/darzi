@@ -27,12 +27,27 @@ export function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<
   // listener below would never fire, and the race would wait for ever. So
   // answer at once.
   if (signal.aborted) return Promise.resolve(ABANDONED);
+
+  // One promise for the work. A store in plain JavaScript may return a plain
+  // value, or an object whose `then` starts its work again at each call.
+  const settled = Promise.resolve(work);
+
+  // The race decides in a microtask, after all abort listeners have run. So a
+  // handler that answers inside its own abort listener still counts.
   return Promise.race([
-    work,
+    settled,
     // Resolves to ABANDONED when the signal aborts. `once` removes the listener
     // after it fires.
     new Promise<typeof ABANDONED>((resolve) => {
-      signal.addEventListener("abort", () => resolve(ABANDONED), { once: true });
+      const onAbort = (): void => resolve(ABANDONED);
+      signal.addEventListener("abort", onAbort, { once: true });
+
+      // The signal lives until the call's deadline. Through this listener, it
+      // can hold the race, and the race holds the result. While the listener
+      // stays, Firefox and WebKit keep an answered result in memory until the
+      // deadline (tested). So the listener goes when the work settles.
+      const removeListener = (): void => signal.removeEventListener("abort", onAbort);
+      settled.then(removeListener, removeListener);
     }),
   ]);
 }

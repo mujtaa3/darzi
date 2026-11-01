@@ -260,7 +260,83 @@
         parent.abort();
         return { aborted: signals.filter((s) => s.aborted).length, timedOut: signals.filter((s) => s.reason.name === "TimeoutError").length, reached };
       });
+
+      // untilAborted alone. While the signal holds its listener, the race and the
+      // result stay in memory.
+      const { untilAborted } = await import("/dist/helpers/runtime.js");
+      const { ABANDONED } = await import("/dist/consts/runtime.js");
+      await counted("race-answered", async () => {
+        const { parent, reached } = countingParent();
+        const value = await untilAborted(Promise.resolve("answer"), parent.signal);
+        parent.abort();
+        return { value, reached };
+      });
+      await counted("race-failed", async () => {
+        const { parent, reached } = countingParent();
+        const error = await untilAborted(Promise.reject(new Error("no")), parent.signal).catch((e) => e.message);
+        parent.abort();
+        return { error, reached };
+      });
+      await counted("race-abort-first", async () => {
+        const { parent, reached } = countingParent();
+        const race = untilAborted(never, parent.signal);
+        parent.abort();
+        return { abandoned: (await race) === ABANDONED, reached };
+      });
+      // A store in plain JavaScript may return a plain value, or an object with a
+      // `then` that starts its work again at each call. Some query builders do that.
+      await counted("race-plain-value", async () => {
+        const { parent, reached } = countingParent();
+        const value = await untilAborted("plain", parent.signal);
+        parent.abort();
+        return { value, reached };
+      });
+      await counted("race-thenable", async () => {
+        const { parent, reached } = countingParent();
+        let thens = 0;
+        const value = await untilAborted({ then(done) { thens += 1; done("lazy"); } }, parent.signal);
+        parent.abort();
+        return { value, thens, reached };
+      });
       log("HELPER-DONE");
+    },
+
+    // Results that a test can watch through a WeakRef. The deadline is far off, so
+    // only the runtime's own cleanup can free one before the test ends.
+    retention() {
+      const refs = {}, kept = [];
+      const watched = (tag) => {
+        const value = { tag, bytes: new ArrayBuffer(1000) };
+        refs[tag] = new WeakRef(value);
+        return value;
+      };
+      // Control: nothing holds this one, so it goes at the first collection.
+      watched("unheld");
+      // `deref` keeps its object alive until the current job ends, so never call
+      // this inside `__collect`.
+      window.__alive = () => Object.fromEntries(Object.entries(refs).map(([tag, ref]) => [tag, ref.deref() !== undefined]));
+      // Only Chrome lets a test start a collection. In each engine, this much
+      // allocation starts one: about 1 s here (tested).
+      window.__collect = async () => {
+        for (let round = 0; round < 60; round++) {
+          let junk = [];
+          for (let i = 0; i < 48; i++) junk.push(new ArrayBuffer(1 << 20));
+          for (let i = 0; i < 150000; i++) junk.push({ i, text: "x" + i });
+          junk = null;
+          await new Promise((r) => setTimeout(r, 5));
+        }
+      };
+      const result = { name: "probe.result", description: "returns an object", handler: (p) => {
+        const value = watched(p.tag);
+        // Control: the page holds this one, so the check can see a live result.
+        if (p.keep) kept.push(value);
+        return value;
+      } };
+      createRuntime({ capabilities: [report, result], callTimeoutMs: 30000 }).render(`<script>
+        marzi.call("probe.result", { tag: "answered" })
+          .then(function () { return marzi.call("probe.result", { tag: "kept", keep: true }); })
+          .then(function () { return marzi.call("probe.report", { tag: "both-answered" }); });
+      <\/script>`, slot);
     },
 
     // The same script against the native functions and against deadlineSignal.
