@@ -75,6 +75,10 @@ as you would make a public API. Register a capability only if it is safe for
 *any* widget to call it. A capability's `description` does not limit what a
 widget can do. Only the validation in your handler limits it.
 
+This includes a capability that a widget did not declare in its `<capabilities>`
+block. To limit a widget today, give it its own `createRuntime`, with only the
+capabilities that it needs.
+
 Per-widget grants are designed for the next release, with a new approval when a
 refinement asks for more capabilities, and a read/write switch.
 

@@ -85,3 +85,13 @@ test("a widget that never connects is reported at startTimeoutMs, and only that 
   expect(fault, "not after startTimeoutMs").toBeLessThan(log.indexOf("AFTER-THE-TIMEOUT"));
   expect(await attack.logged("FAULT "), "only the orphan").toEqual(["orphan never-started"]);
 });
+
+test("a widget can call only what its own runtime registered", async ({ page }) => {
+  const attack = await openAttack(page, "handshake-edges?probe=separate-runtimes");
+  await attack.untilLog('"tag":"writer-done"');
+  await attack.untilLog('"tag":"reader-done"');
+
+  expect((await attack.log()).filter((l) => l === "WRITE-RAN"), "only the writer's call").toHaveLength(1);
+  expect(String((await attack.reports()).find((r) => r["tag"] === "reader-done")?.["result"])).toContain("no such capability");
+  expect(await attack.logged("AUDIT reader "), "the refusal").toContain("probe.write refused · no such capability");
+});

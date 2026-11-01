@@ -115,6 +115,15 @@
     // loads, because its container is not on the page. Another frame's knocks must
     // not stop the timer. The two extra timers bracket it: a browser runs timers in
     // due-time order at any load, so the test needs no clock.
+    // Two runtimes on one page: a widget can call only what its own runtime has.
+    "separate-runtimes"() {
+      const write = { name: "probe.write", description: "a write", handler: () => { log("WRITE-RAN"); return true; } };
+      createRuntime({ capabilities: [reporting(), write], onAudit, onWidgetFault })
+        .render(`<script>marzi.call("probe.write").then(function () { marzi.call("probe.report", { tag: "writer-done" }); });<\/script>`, slot, { id: "writer" });
+      createRuntime({ capabilities: [reporting()], onAudit, onWidgetFault })
+        .render(`<script>marzi.call("probe.write").then(function () { return "called"; }, function (e) { return e.message; }).then(function (r) { marzi.call("probe.report", { tag: "reader-done", result: r }); });<\/script>`, slot, { id: "reader" });
+    },
+
     "never-started"() {
       const rt = createRuntime({ capabilities: [reporting()], startTimeoutMs: 500, onAudit, onWidgetFault });
       rt.render("<p>orphan</p>", document.createElement("div"), { id: "orphan" });
