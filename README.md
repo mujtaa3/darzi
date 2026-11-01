@@ -79,6 +79,9 @@ This includes a capability that a widget did not declare in its `<capabilities>`
 block. To limit a widget today, give it its own `createRuntime`, with only the
 capabilities that it needs.
 
+marzi refuses params that are more than 32 levels deep, or that have more than
+10,000 values or about 1 MB of text.
+
 To confirm a write, ask in your handler, with UI that your page draws outside the
 frame. A call's deadline is 30 s by default (`callTimeoutMs`), so a handler that
 waits for a person must watch `signal` and close its dialog on abort. Otherwise the
@@ -173,8 +176,12 @@ const libs = (/<libs>(.*?)<\/libs>/s.exec(reply)?.[1] ?? "")
 runtime.render(html, document.getElementById("slot"), { libs });
 ```
 
-`<title>` is a name to show to the user. `<capabilities>` lists the names that
-the widget says it calls. In 0.1.0, nothing enforces that list.
+`<title>` is a name to show to the user. It is model output, so show it as text.
+`<capabilities>` lists the names that the widget says it calls. In 0.1.0, nothing
+enforces that list.
+
+Fill `{{CAPABILITIES}}` with each capability's name, parameters and result. The
+model knows only what you write there.
 
 The templates teach the model the rules of the jail. All three templates are in
 the package. On a server, find a template with
