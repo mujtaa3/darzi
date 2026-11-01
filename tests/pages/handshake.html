@@ -20,9 +20,9 @@
     var raw = null;
     window.addEventListener("message", function (e) {
       if (e.ports && e.ports[0]) raw = e.ports[0];
-      if (e.data && e.data.go) marzi.call("probe.report", { at: "after-knocks" });
+      if (e.data && e.data.go) darzi.call("probe.report", { at: "after-knocks" });
     });
-    marzi.call("probe.report", { at: "honest" }).then(function () {
+    darzi.call("probe.report", { at: "honest" }).then(function () {
       raw.postMessage({ jsonrpc: "2.0", id: 999, method: "probe.report",
         params: { at: "forged" }, widgetId: "someone-else", origin: "https://trusted.example" });
     });
@@ -44,13 +44,13 @@
     window.addEventListener("message", function (e) {
       if (e.ports && e.ports[0]) parent.postMessage({ sibling: "got-a-port" }, "*");
       if (e.data && e.data.knockNow) {
-        parent.postMessage({ marzi: "ready" }, "*");
-        parent.postMessage({ marzi: "ready" }, "*");
+        parent.postMessage({ darzi: "ready" }, "*");
+        parent.postMessage({ darzi: "ready" }, "*");
         parent.postMessage({ sibling: "knocked-late" }, "*");
       }
     });
-    parent.postMessage({ marzi: "ready" }, "*");
-    setTimeout(function () { parent.postMessage({ marzi: "ready" }, "*"); parent.postMessage({ sibling: "knocked-twice" }, "*"); }, 300);
+    parent.postMessage({ darzi: "ready" }, "*");
+    setTimeout(function () { parent.postMessage({ darzi: "ready" }, "*"); parent.postMessage({ sibling: "knocked-twice" }, "*"); }, 300);
   <\/script>`;
   document.getElementById("sibling").appendChild(sibling);
 </script>

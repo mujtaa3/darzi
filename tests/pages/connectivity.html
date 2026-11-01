@@ -42,7 +42,7 @@
   runtime.render(`<script>
     (${probe})(${JSON.stringify(WITNESS)}, "widget");
     (${probe})(${JSON.stringify(LOCAL)}, "widget-host");
-    setTimeout(function () { marzi.call("probe.report", {}); }, 200);
+    setTimeout(function () { darzi.call("probe.report", {}); }, 200);
   <\/script>`, document.getElementById("slot"));
 
   // Control: the same probes from a plain frame with no sandbox and no CSP.

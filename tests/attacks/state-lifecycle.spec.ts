@@ -12,7 +12,7 @@ import type { Page } from "@playwright/test";
 
 test("store calls are cut off at the deadline and on destroy, and told so", ({ page }) => storeCalls(page));
 
-// See deadlines.spec.ts: marzi must not need these two functions.
+// See deadlines.spec.ts: darzi must not need these two functions.
 test("the same, without AbortSignal.any and AbortSignal.timeout", async ({ page }) => {
   await removeNewAbortFunctions(page);
   await storeCalls(page);
@@ -44,12 +44,12 @@ async function storeCalls(page: Page) {
   expect(store.some((s) => s.startsWith("deadline put aborted TimeoutError"))).toBe(true);
   expect(store.some((s) => s.startsWith("deadline get aborted TimeoutError"))).toBe(true);
   // …and the audit records it.
-  expect(audits).toContain("wid-save marzi/saveState refused · timed out");
-  expect(audits).toContain("wid-load marzi/loadState refused · timed out");
+  expect(audits).toContain("wid-save darzi/saveState refused · timed out");
+  expect(audits).toContain("wid-load darzi/loadState refused · timed out");
 
   // Destroy mid-write: the in-flight write's signal aborts with the widget.
   expect(store).toContain("destroy put aborted AbortError:widget destroyed");
-  expect(audits).toContain("wid-doomed marzi/saveState refused · widget destroyed");
+  expect(audits).toContain("wid-doomed darzi/saveState refused · widget destroyed");
 
   // Control: a healthy store round-trips.
   expect(by["healthy"]).toMatchObject({ ok: true, value: { n: 7 } });

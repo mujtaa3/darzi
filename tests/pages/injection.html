@@ -10,7 +10,7 @@
 
   // Nobody attacked the model. A string reached the DATA — a merchant name —
   // and two honest widgets render it. Only one of them is careless.
-  const payload = `<img src=x onerror="marzi.call('probe.stolen');marzi.call('admin.export')">`;
+  const payload = `<img src=x onerror="darzi.call('probe.stolen');darzi.call('admin.export')">`;
   const rows = [
     { date: "2026-09-01", merchant: "Blue Bottle", amount: -4.5 },
     { date: "2026-09-02", merchant: payload, amount: -12 },
@@ -26,14 +26,14 @@
   });
 
   const widget = (mode) => `<div id="rows"></div><script>
-    marzi.call("transactions.list").then(function (txns) {
+    darzi.call("transactions.list").then(function (txns) {
       var host = document.getElementById("rows");
       txns.forEach(function (t) {
         var m = document.createElement("div");
         host.appendChild(m);       // insert first: a detached element defers loads
         m.${mode} = t.merchant;    // the only difference between the twins
       });
-      setTimeout(function () { marzi.call("probe.report", { tag: "${mode}-rendered" }); }, 300);
+      setTimeout(function () { darzi.call("probe.report", { tag: "${mode}-rendered" }); }, 300);
     });
   <\/script>`;
 

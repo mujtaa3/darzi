@@ -2,7 +2,7 @@
  * Deadlines — what stops a call that leaves the switchboard (pre-publish review
  * SF-2, bugs.md B24).
  *
- * A capability handler is host code that marzi does not control. So each call
+ * A capability handler is host code that darzi does not control. So each call
  * gets a signal that aborts at `callTimeoutMs`, or when the widget is destroyed.
  * The runtime also stops waiting at that moment, whatever the handler does.
  *
@@ -134,8 +134,8 @@ for (const mode of ["as it is", "without the new functions"] as const) {
       }
       const replies = Object.fromEntries((await attack.reports()).map((r) => [r.tag, r.error]));
       expect(replies).toEqual({ load: "state operation timed out", save: "state operation timed out" });
-      expect(await attack.logged("AUDIT wid marzi/loadState")).toEqual([" dispatched", " refused · timed out"]);
-      expect(await attack.logged("AUDIT wid marzi/saveState")).toEqual([" dispatched", " refused · timed out"]);
+      expect(await attack.logged("AUDIT wid darzi/loadState")).toEqual([" dispatched", " refused · timed out"]);
+      expect(await attack.logged("AUDIT wid darzi/saveState")).toEqual([" dispatched", " refused · timed out"]);
     });
 
     test("a store's own result after the abort does not count", async ({ page }) => {
@@ -143,7 +143,7 @@ for (const mode of ["as it is", "without the new functions"] as const) {
       await attack.untilLog('"tag":"load"');
 
       expect((await attack.reports())[0]).toEqual({ tag: "load", ok: false, error: "state operation timed out" });
-      expect(await attack.logged("AUDIT wid marzi/loadState")).toEqual([" dispatched", " refused · timed out"]);
+      expect(await attack.logged("AUDIT wid darzi/loadState")).toEqual([" dispatched", " refused · timed out"]);
     });
 
     test("each call gets its own full deadline", async ({ page }) => {
@@ -207,7 +207,7 @@ for (const mode of ["as it is", "without the new functions"] as const) {
       const log = await attack.log();
       expect(lines(log, "START get")).toEqual(["START get aborted=true"]);
       expect(lines(log, "ABORT get")[0]).toContain(" AbortError:widget destroyed");
-      expect(await attack.logged("AUDIT wid marzi/loadState")).toEqual([" dispatched", " refused · widget destroyed"]);
+      expect(await attack.logged("AUDIT wid darzi/loadState")).toEqual([" dispatched", " refused · widget destroyed"]);
     });
   });
 }

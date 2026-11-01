@@ -39,7 +39,7 @@
     // On each load: a window message, then one call.
     move: `<script>
       parent.parent.postMessage({ probe: "loaded" }, "*");
-      marzi.call("probe.report", {});
+      darzi.call("probe.report", {});
     <\/script>`,
     // After its first call, the widget sends "ready" 1000 times, then asks for
     // a sync. It counts each port that arrives, and reports the total.
@@ -49,8 +49,8 @@
         if (e.ports && e.ports.length) ports++;
         if (e.data && e.data.go) parent.parent.postMessage({ probe: "ports", n: ports }, "*");
       });
-      marzi.call("probe.report", { at: "first" }).then(function () {
-        for (var i = 0; i < 1000; i++) parent.parent.postMessage({ marzi: "ready" }, "*");
+      darzi.call("probe.report", { at: "first" }).then(function () {
+        for (var i = 0; i < 1000; i++) parent.parent.postMessage({ darzi: "ready" }, "*");
         parent.parent.postMessage({ probe: "sync" }, "*");
       });
     <\/script>`,
@@ -63,8 +63,8 @@
         if (!e.ports || !e.ports[0]) return;
         ports.push(e.ports[0]);
         if (ports.length === 1) {
-          marzi.call("probe.report", { at: "first" }).then(function () {
-            parent.parent.postMessage({ marzi: "ready" }, "*");
+          darzi.call("probe.report", { at: "first" }).then(function () {
+            parent.parent.postMessage({ darzi: "ready" }, "*");
           });
         } else {
           ports[0].postMessage({ jsonrpc: "2.0", id: 71, method: "probe.report", params: { at: "old-port" } });
@@ -76,14 +76,14 @@
     // reload, so the second load knows not to reload again.
     reload: `<script>
       parent.parent.postMessage({ probe: "loaded" }, "*");
-      marzi.call("probe.report", { name: window.name }).then(function () {
+      darzi.call("probe.report", { name: window.name }).then(function () {
         if (window.name !== "r") { window.name = "r"; location.reload(); }
       });
     <\/script>`,
     // On each load: one slow call (id 1 in each load), and its result.
     stale: `<script>
       parent.parent.postMessage({ probe: "loaded" }, "*");
-      marzi.call("probe.slow", {}).then(
+      darzi.call("probe.slow", {}).then(
         function (r) { parent.parent.postMessage({ probe: "result", r: r }, "*"); },
         function (e) { parent.parent.postMessage({ probe: "result", r: "ERR " + e.message }, "*"); });
     <\/script>`,

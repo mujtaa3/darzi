@@ -38,9 +38,9 @@
   });
   for (const [name, move] of Object.entries(MOVES)) {
     runtime.render(`<div>runtime ${name}</div><script>
-      marzi.call("probe.report", { at: "start:${name}" }).then(function () {
-        try { ${move(WITNESS + "?via=runtime-" + name)} } catch (e) { marzi.call("probe.report", { at: "threw:${name}:" + e.name }); }
-        setTimeout(function () { marzi.call("probe.report", { at: "alive:${name}" }); }, 600);
+      darzi.call("probe.report", { at: "start:${name}" }).then(function () {
+        try { ${move(WITNESS + "?via=runtime-" + name)} } catch (e) { darzi.call("probe.report", { at: "threw:${name}:" + e.name }); }
+        setTimeout(function () { darzi.call("probe.report", { at: "alive:${name}" }); }, 600);
       });
     <\/script>`, document.getElementById("runtime"));
   }

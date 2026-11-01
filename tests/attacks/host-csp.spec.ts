@@ -2,7 +2,7 @@
  * The host page's CSP — what it takes from a widget (bugs.md B24, B41).
  *
  * A `srcdoc` frame inherits its parent's CSP, so the host's policy applies to
- * both of marzi's frames. Each row here is a claim in the README, "Your page's
+ * both of darzi's frames. Each row here is a claim in the README, "Your page's
  * CSP". The policy comes as a response header, as it does on a real host.
  */
 import { test, expect } from "../harness/witness";

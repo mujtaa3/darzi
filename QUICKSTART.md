@@ -7,11 +7,11 @@
 > See [Who decides what a widget may call](README.md#who-decides-what-a-widget-may-call).
 
 ```bash
-npm install marzi
+npm install @darzi/core
 ```
 
 ```js
-import { createRuntime, memoryStore } from "marzi";
+import { createRuntime, memoryStore } from "@darzi/core";
 
 const runtime = createRuntime({
   // What widgets may call. Each handler runs in your page, with your session.
@@ -32,13 +32,13 @@ widget.frame.style.border = "1px solid #ccc";   // shows users where your app st
 widget.destroy();
 ```
 
-In the widget, the model's code gets one object, `marzi`:
+In the widget, the model's code gets one object, `darzi`:
 
 ```html
 <ul id="out"></ul>
 <script>
   var out = document.getElementById("out");
-  marzi.call("transactions.list").then(function (rows) {
+  darzi.call("transactions.list").then(function (rows) {
     rows.forEach(function (r) {
       var li = document.createElement("li");
       li.textContent = r.memo + "  " + r.amount;
@@ -50,11 +50,11 @@ In the widget, the model's code gets one object, `marzi`:
 </script>
 ```
 
-`marzi.call(name, params)` returns a promise. `marzi.saveState(value)` and
-`marzi.loadState()` save and load one small JSON value for each saved widget.
+`darzi.call(name, params)` returns a promise. `darzi.saveState(value)` and
+`darzi.loadState()` save and load one small JSON value for each saved widget.
 These three methods are the full in-frame API.
 
-marzi saves a widget's state, not the widget. Your app saves the widget HTML, and
+darzi saves a widget's state, not the widget. Your app saves the widget HTML, and
 renders it again with the same `id`. `memoryStore()` empties on a reload, so a real
 app implements `getState` and `putState` over its backend.
 
@@ -64,7 +64,7 @@ also check that the signed-in user owns that `id`.
 
 ## Getting the HTML
 
-marzi never calls a model. Your app calls the model:
+darzi never calls a model. Your app calls the model:
 
 1. Take the text of `prompts/widget-author.md` (or `widget-refine.md`) after its
    `---` line, for example with `template.split("\n---\n")[1]`. The text above
@@ -98,12 +98,12 @@ model knows only what you write there.
 
 The templates teach the model the rules of the jail. All three templates are in
 the package. On a server, find a template with
-`import.meta.resolve("marzi/prompts/widget-author.md")`, then read the file. In a
-browser bundle, import the file as text, for example with Vite's
-`marzi/prompts/widget-author.md?raw`.
+`import.meta.resolve("@darzi/core/prompts/widget-author.md")`, then read the file.
+In a browser bundle, import the file as text, for example with Vite's
+`@darzi/core/prompts/widget-author.md?raw`.
 
 To use a library such as a charting library, put a copy of its source code in
-your app. Give that source code to marzi in the `libraries` option. marzi adds
+your app. Give that source code to darzi in the `libraries` option. darzi adds
 the source code to the widget's frame as an inline script, because the frame can
 never fetch it. A widget gets only the libraries that `libs` names. `render`
 throws for a name that you did not register. A library that uses `eval`,
@@ -112,7 +112,7 @@ them.
 
 ## When a widget breaks
 
-A model sometimes writes code that does not work. marzi reports each failure to
+A model sometimes writes code that does not work. darzi reports each failure to
 your page as a fault, through the `onWidgetFault` option. A fault has one of
 two kinds:
 
@@ -148,7 +148,7 @@ error that widget code throws: the message is "Script error." and there is no
 position. A failed promise keeps its message in all three browsers.
 
 When your capability handler throws, the audit log records the call as refused,
-with the reason `capability failed`. marzi records it, then gives the widget only
+with the reason `capability failed`. darzi records it, then gives the widget only
 that fixed text. The real error goes to your console. To show the widget a reason,
 such as bad params, return it as a value and do not throw.
 

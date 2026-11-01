@@ -66,7 +66,7 @@ test("a claimed id changes nothing on a call, a refusal, or saved state", async 
   expect(await attack.logged("AUDIT other "), "under the other widget's id").toEqual(["probe.report dispatched"]);
   const audits = await attack.logged("AUDIT claimer ");
   expect(audits, "the refusal").toContain("no.such refused · no such capability");
-  expect(audits, "the state call").toContain("marzi/saveState dispatched");
+  expect(audits, "the state call").toContain("darzi/saveState dispatched");
   expect(await attack.logged("PUT "), "the store's key").toEqual(["claimer"]);
   // In params, the claim is only data.
   expect((await attack.reports()).find((r) => r.tag === "claimed")?.widgetId).toBe("other");

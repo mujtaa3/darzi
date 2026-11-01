@@ -25,10 +25,10 @@
     flood() {
       addSibling(`
         addEventListener("message", function (e) { if (e.ports && e.ports[0]) parent.postMessage({ sibling: "got-a-port" }, "*"); });
-        for (var i = 0; i < 5000; i++) { parent.postMessage({ marzi: "ready" }, "*"); parent.postMessage({ junk: i }, "*"); }
+        for (var i = 0; i < 5000; i++) { parent.postMessage({ darzi: "ready" }, "*"); parent.postMessage({ junk: i }, "*"); }
         parent.postMessage({ sibling: "flooded" }, "*");`);
       createRuntime({ capabilities: [reporting()], onAudit, onWidgetFault })
-        .render(`<script>marzi.call("probe.report", { tag: "connected" });<\/script>`, slot, { id: "target" });
+        .render(`<script>darzi.call("probe.report", { tag: "connected" });<\/script>`, slot, { id: "target" });
     },
 
     // A frame nested inside a widget knocks at the host, and counts its ports.
@@ -39,16 +39,16 @@
         if (p.tag === "nested-ports") victim.frame.contentWindow.frames[0].postMessage({ go: 1 }, "*");
       })], onAudit, onWidgetFault });
       victim = rt.render(`<script>
-        addEventListener("message", function (e) { if (e.data && e.data.go) marzi.call("probe.report", { tag: "victim-after" }); });
-        marzi.call("probe.report", { tag: "victim-before" });
+        addEventListener("message", function (e) { if (e.data && e.data.go) darzi.call("probe.report", { tag: "victim-after" }); });
+        darzi.call("probe.report", { tag: "victim-before" });
       <\/script>`, slot, { id: "victim" });
       rt.render(`<script>
         addEventListener("message", function (e) {
-          if (e.data && typeof e.data.nested === "number") marzi.call("probe.report", { tag: "nested-ports", n: e.data.nested });
+          if (e.data && typeof e.data.nested === "number") darzi.call("probe.report", { tag: "nested-ports", n: e.data.nested });
         });
         var f = document.createElement("iframe");
         f.setAttribute("srcdoc", '<script>var got = 0; addEventListener("message", function (e) { if (e.ports && e.ports.length) got++; });' +
-          'top.postMessage({ marzi: "ready" }, "*"); top.postMessage({ marzi: "ready" }, "*");' +
+          'top.postMessage({ darzi: "ready" }, "*"); top.postMessage({ darzi: "ready" }, "*");' +
           'setTimeout(function () { parent.postMessage({ nested: got }, "*"); }, 300);<\\/script>');
         document.body.appendChild(f);
       <\/script>`, slot, { id: "knocker" });
@@ -58,7 +58,7 @@
     "destroy-early"() {
       const rt = createRuntime({ capabilities: [reporting()], startTimeoutMs: 300, onAudit, onWidgetFault });
       rt.render("<p>x</p>", slot, { id: "doomed" }).destroy();
-      rt.render(`<script>marzi.call("probe.report", { tag: "same-id" });<\/script>`, slot, { id: "doomed" });
+      rt.render(`<script>darzi.call("probe.report", { tag: "same-id" });<\/script>`, slot, { id: "doomed" });
       setTimeout(() => log("PAST-START-TIMEOUT"), 800);
     },
 
@@ -70,7 +70,7 @@
         if (p.tag === "lent-before") {
           owner.destroy();
           log("DESTROYED owner");
-          rt.render(`<script>marzi.call("probe.report", { tag: "new-owner" });<\/script>`, slot, { id: "owner" });
+          rt.render(`<script>darzi.call("probe.report", { tag: "new-owner" });<\/script>`, slot, { id: "owner" });
         }
         if (p.tag === "new-owner") helper.frame.contentWindow.frames[0].postMessage({ sendAgain: 1 }, "*");
       })], onAudit, onWidgetFault });
@@ -79,14 +79,14 @@
         function send(tag) { lent.postMessage({ jsonrpc: "2.0", id: Math.random(), method: "probe.report", params: { tag: tag } }); }
         addEventListener("message", function (e) {
           if (e.data && e.data.lend) { lent = e.ports[0]; send("lent-before"); }
-          if (e.data && e.data.sendAgain) { send("lent-after"); marzi.call("probe.report", { tag: "helper-sent" }); }
+          if (e.data && e.data.sendAgain) { send("lent-after"); darzi.call("probe.report", { tag: "helper-sent" }); }
         });
-        marzi.call("probe.report", { tag: "helper-ready" });
+        darzi.call("probe.report", { tag: "helper-ready" });
       <\/script>`, slot, { id: "helper" });
       owner = rt.render(`<script>
         var raw = null;
         addEventListener("message", function (e) { if (e.ports && e.ports[0]) raw = e.ports[0]; });
-        marzi.call("probe.report", { tag: "owner-ready" }).then(function () {
+        darzi.call("probe.report", { tag: "owner-ready" }).then(function () {
           top.frames[0].frames[0].postMessage({ lend: 1 }, "*", [raw]);
         });
       <\/script>`, slot, { id: "owner" });
@@ -98,14 +98,14 @@
       const inner = memoryStore();
       const store = { getState: inner.getState, putState: (id, json, signal) => { log("PUT " + id); return inner.putState(id, json, signal); } };
       const rt = createRuntime({ capabilities: [reporting()], store, onAudit, onWidgetFault });
-      rt.render(`<script>marzi.call("probe.report", { tag: "other-ready" });<\/script>`, slot, { id: "other" });
+      rt.render(`<script>darzi.call("probe.report", { tag: "other-ready" });<\/script>`, slot, { id: "other" });
       rt.render(`<script>
         var raw = null;
         addEventListener("message", function (e) { if (e.ports && e.ports[0]) raw = e.ports[0]; });
-        marzi.call("probe.report", { tag: "claimer-ready" }).then(function () {
+        darzi.call("probe.report", { tag: "claimer-ready" }).then(function () {
           raw.postMessage({ jsonrpc: "2.0", id: 1, method: "probe.report", widgetId: "other", params: { tag: "claimed", widgetId: "other" } });
           raw.postMessage({ jsonrpc: "2.0", id: 2, method: "no.such", widgetId: "other" });
-          raw.postMessage({ jsonrpc: "2.0", id: 3, method: "marzi/saveState", widgetId: "other", params: { value: { n: 1 }, widgetId: "other" } });
+          raw.postMessage({ jsonrpc: "2.0", id: 3, method: "darzi/saveState", widgetId: "other", params: { value: { n: 1 }, widgetId: "other" } });
           raw.postMessage({ jsonrpc: "2.0", id: 4, method: "probe.report", params: { tag: "claimer-done" } });
         });
       <\/script>`, slot, { id: "claimer" });
@@ -119,21 +119,21 @@
     "separate-runtimes"() {
       const write = { name: "probe.write", description: "a write", handler: () => { log("WRITE-RAN"); return true; } };
       createRuntime({ capabilities: [reporting(), write], onAudit, onWidgetFault })
-        .render(`<script>marzi.call("probe.write").then(function () { marzi.call("probe.report", { tag: "writer-done" }); });<\/script>`, slot, { id: "writer" });
+        .render(`<script>darzi.call("probe.write").then(function () { darzi.call("probe.report", { tag: "writer-done" }); });<\/script>`, slot, { id: "writer" });
       createRuntime({ capabilities: [reporting()], onAudit, onWidgetFault })
-        .render(`<script>marzi.call("probe.write").then(function () { return "called"; }, function (e) { return e.message; }).then(function (r) { marzi.call("probe.report", { tag: "reader-done", result: r }); });<\/script>`, slot, { id: "reader" });
+        .render(`<script>darzi.call("probe.write").then(function () { return "called"; }, function (e) { return e.message; }).then(function (r) { darzi.call("probe.report", { tag: "reader-done", result: r }); });<\/script>`, slot, { id: "reader" });
     },
 
     "never-started"() {
       const rt = createRuntime({ capabilities: [reporting()], startTimeoutMs: 500, onAudit, onWidgetFault });
       rt.render("<p>orphan</p>", document.createElement("div"), { id: "orphan" });
-      rt.render(`<script>marzi.call("probe.report", { tag: "alive" });<\/script>`, slot, { id: "alive" });
+      rt.render(`<script>darzi.call("probe.report", { tag: "alive" });<\/script>`, slot, { id: "alive" });
       // Widget code cannot cause this fault, because the stub says "ready" first.
-      rt.render(`<script>window.marzi = null; window.postMessage = null;<\/script>`, slot, { id: "stub-overwritten" });
+      rt.render(`<script>window.darzi = null; window.postMessage = null;<\/script>`, slot, { id: "stub-overwritten" });
       rt.render(`<script>location.replace("${location.origin}/elsewhere");<\/script>`, slot, { id: "navigates-at-once" });
       setTimeout(() => log("BEFORE-THE-TIMEOUT"), 300);
       setTimeout(() => log("AFTER-THE-TIMEOUT"), 800);
-      addSibling(`setInterval(function () { parent.postMessage({ marzi: "ready" }, "*"); }, 50);`);
+      addSibling(`setInterval(function () { parent.postMessage({ darzi: "ready" }, "*"); }, 50);`);
     },
   };
 

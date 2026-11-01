@@ -22,7 +22,7 @@
   // A widget that reports while its process lives, and the host page likewise.
   const reporting = (who) => `<script>
     var n = 0;
-    setInterval(function () { n += 1; marzi.call("probe.tell", { label: "${who}-" + n }); }, 150);
+    setInterval(function () { n += 1; darzi.call("probe.tell", { label: "${who}-" + n }); }, 150);
   <\/script>`;
   let beats = 0;
   setInterval(() => { beats += 1; tell(`host-${beats}`); }, 150);
@@ -30,7 +30,7 @@
 
   window.__attack = () => {
     runtime.render(`<script>
-      marzi.call("probe.tell", { label: "hostile-start" }).then(function () {
+      darzi.call("probe.tell", { label: "hostile-start" }).then(function () {
         var pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:127.0.0.1:3478" }] });
         pc.createDataChannel("x");
         pc.createOffer().then(function (o) { return pc.setLocalDescription(o); });

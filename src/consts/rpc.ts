@@ -25,7 +25,7 @@ export const MAX_ID_LENGTH = 300;
  * Keys that rewrite an object's prototype chain instead of storing data.
  *
  * `structuredClone` delivers an own property literally named `__proto__`
- * across the port intact (measured). marzi itself never merges params, so the
+ * across the port intact (measured). darzi itself never merges params, so the
  * runtime is not vulnerable — but a handler that recursively merges them
  * (lodash.merge, a hand-rolled config merger) would write through that key
  * into `Object.prototype`: the one hidden object every plain object in the

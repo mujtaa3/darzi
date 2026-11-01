@@ -40,7 +40,7 @@
         replies.push(m.data.error ? { id: m.data.id, code: m.data.error.code, message: m.data.error.message } : { id: m.data.id, ok: true });
       });
     });
-    marzi.call("probe.echo", { tag: "junk-control" }).then(function () {
+    darzi.call("probe.echo", { tag: "junk-control" }).then(function () {
       [42, "hello", null, [], { jsonrpc: "1.0", id: "old-version", method: "probe.echo" }, { jsonrpc: "2.0", id: {}, method: "probe.echo" },
        { jsonrpc: "2.0", id: true, method: "probe.echo" }, { jsonrpc: "2.0", method: 5 },
        { jsonrpc: "2.0", id: "x".repeat(301), method: "probe.echo", params: { tag: "id-too-long" } },
@@ -49,10 +49,10 @@
        { jsonrpc: "2.0", id: "x".repeat(300), method: "probe.echo", params: { tag: "id-at-limit" } }
       ].forEach(function (junk) { raw.postMessage(junk); });
       // The same mistake through the stub. The promise must reject now, and not at the backstop.
-      return marzi.call({ name: "x" }).then(function () { return "it resolved"; }, function (e) { return e.message; });
+      return darzi.call({ name: "x" }).then(function () { return "it resolved"; }, function (e) { return e.message; });
     }).then(function (callError) {
-      return marzi.call("probe.echo", { tag: "junk-after" }).then(function () {
-        return marzi.call("probe.echo", { tag: "junk-replies", replies: replies, callError: callError });
+      return darzi.call("probe.echo", { tag: "junk-after" }).then(function () {
+        return darzi.call("probe.echo", { tag: "junk-replies", replies: replies, callError: callError });
       });
     });
   <\/script>`, document.getElementById("slot"));
@@ -64,7 +64,7 @@
   runtime.render(`<script>
     var raw = null;
     window.addEventListener("message", function (e) { if (e.ports && e.ports[0]) raw = e.ports[0]; });
-    marzi.call("probe.echo", { tag: "control" }).then(function () {
+    darzi.call("probe.echo", { tag: "control" }).then(function () {
       var send = function (id, params) { raw.postMessage({ jsonrpc: "2.0", id: id, method: "probe.echo", params: params }); };
       send(1, JSON.parse('{"tag":"proto","__proto__":{"polluted":true}}'));
       send(2, { tag: "big", blob: "x".repeat(1100000) });

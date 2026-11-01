@@ -50,21 +50,21 @@
   // A widget that runs one call, and reports how it settled.
   const settled = (tag, call) => `<script>
     ${call}.then(
-      function (v) { marzi.call("probe.report", { tag: "${tag}", ok: true, value: v }); },
-      function (e) { marzi.call("probe.report", { tag: "${tag}", ok: false, error: e.message }); });
+      function (v) { darzi.call("probe.report", { tag: "${tag}", ok: true, value: v }); },
+      function (e) { darzi.call("probe.report", { tag: "${tag}", ok: false, error: e.message }); });
   <\/script>`;
 
   const SCENARIOS = {
     // Control: a call that answers. Its deadline passes later, with no effect.
     answers() {
       createRuntime({ capabilities: [report, quick], callTimeoutMs: MS, onAudit })
-        .render(settled("quick", 'marzi.call("probe.quick", { tag: "quick" })'), slot, { id: "wid" });
+        .render(settled("quick", 'darzi.call("probe.quick", { tag: "quick" })'), slot, { id: "wid" });
     },
 
     // A handler that never answers stops at the deadline.
     deadline() {
       createRuntime({ capabilities: [report, hang], callTimeoutMs: MS, onAudit })
-        .render(settled("hang", 'marzi.call("probe.hang", { tag: "hang" })'), slot, { id: "wid" });
+        .render(settled("hang", 'darzi.call("probe.hang", { tag: "hang" })'), slot, { id: "wid" });
     },
 
     // The way the quick start tells a handler to use the signal. The route never answers.
@@ -75,7 +75,7 @@
           throw e;
         }) };
       createRuntime({ capabilities: [report, viaFetch], callTimeoutMs: MS, onAudit })
-        .render(settled("fetch", 'marzi.call("probe.fetch")'), slot, { id: "wid" });
+        .render(settled("fetch", 'darzi.call("probe.fetch")'), slot, { id: "wid" });
     },
 
     // A handler that reacts to the abort after an await. The runtime has already
@@ -86,7 +86,7 @@
           await new Promise((_, reject) => signal.addEventListener("abort", () => reject(new Error("stopped"))));
         } };
       createRuntime({ capabilities: [report, aware], callTimeoutMs: MS, onAudit })
-        .render(settled("aware", 'marzi.call("probe.aware")'), slot, { id: "wid" });
+        .render(settled("aware", 'darzi.call("probe.aware")'), slot, { id: "wid" });
     },
 
     // A handler that answers inside its abort listener. That answer is first.
@@ -94,7 +94,7 @@
       const direct = { name: "probe.direct", description: "answers in the abort listener",
         handler: (p, { signal }) => new Promise((resolve) => signal.addEventListener("abort", () => resolve({ partial: true }))) };
       createRuntime({ capabilities: [report, direct], callTimeoutMs: MS, onAudit })
-        .render(settled("direct", 'marzi.call("probe.direct")'), slot, { id: "wid" });
+        .render(settled("direct", 'darzi.call("probe.direct")'), slot, { id: "wid" });
     },
 
     // A handler that rejects inside its abort listener. That failure is first.
@@ -102,27 +102,27 @@
       const direct = { name: "probe.direct", description: "rejects in the abort listener",
         handler: (p, { signal }) => new Promise((_, reject) => signal.addEventListener("abort", () => reject(new Error("stopped")))) };
       createRuntime({ capabilities: [report, direct], callTimeoutMs: MS, onAudit })
-        .render(settled("direct", 'marzi.call("probe.direct")'), slot, { id: "wid" });
+        .render(settled("direct", 'darzi.call("probe.direct")'), slot, { id: "wid" });
     },
 
     // A store that never answers stops at the deadline, as a handler does.
     "store-deadline"() {
       createRuntime({ capabilities: [report], store: hangingStore, callTimeoutMs: MS, onAudit })
-        .render(settled("load", "marzi.loadState()") + settled("save", "marzi.saveState({ n: 1 })"), slot, { id: "wid" });
+        .render(settled("load", "darzi.loadState()") + settled("save", "darzi.saveState({ n: 1 })"), slot, { id: "wid" });
     },
 
     // As "abort-aware", for a store.
     "store-abort-aware"() {
       createRuntime({ capabilities: [report], store: lateStore, callTimeoutMs: MS, onAudit })
-        .render(settled("load", "marzi.loadState()"), slot, { id: "wid" });
+        .render(settled("load", "darzi.loadState()"), slot, { id: "wid" });
     },
 
     // A second call gets its own full deadline.
     "own-deadline"() {
       createRuntime({ capabilities: [report, hang], callTimeoutMs: MS, onAudit })
         .render(`<script>
-          marzi.call("probe.hang", { tag: "first" });
-          setTimeout(function () { marzi.call("probe.hang", { tag: "second" }); }, 200);
+          darzi.call("probe.hang", { tag: "first" });
+          setTimeout(function () { darzi.call("probe.hang", { tag: "second" }); }, 200);
         <\/script>`, slot, { id: "wid" });
     },
 
@@ -135,7 +135,7 @@
         setTimeout(() => log("PAST-DEADLINE"), MS + 200);
         return never;
       } }], callTimeoutMs: MS, onAudit });
-      const widget = rt.render(`<script>marzi.call("probe.hang", { tag: "doomed" });<\/script>`, slot, { id: "wid" });
+      const widget = rt.render(`<script>darzi.call("probe.hang", { tag: "doomed" });<\/script>`, slot, { id: "wid" });
     },
 
     // Destroy stops every call of that widget, and no call of any other widget.
@@ -149,12 +149,12 @@
         return never;
       } }], onAudit });
       const doomed = rt.render(`<script>
-        marzi.call("probe.hang", { tag: "doomed-1" });
-        marzi.call("probe.hang", { tag: "doomed-2" });
+        darzi.call("probe.hang", { tag: "doomed-1" });
+        darzi.call("probe.hang", { tag: "doomed-2" });
       <\/script>`, slot, { id: "doomed" });
       const other = rt.render(`<script>
-        marzi.call("probe.hang", { tag: "other" });
-        setInterval(function () { marzi.call("probe.report", { tag: "other-alive" }); }, 100);
+        darzi.call("probe.hang", { tag: "other" });
+        setInterval(function () { darzi.call("probe.report", { tag: "other-alive" }); }, 100);
       <\/script>`, slot, { id: "other" });
       await begun;
       doomed.destroy();
@@ -177,16 +177,16 @@
         onAudit(e);
         if (e.method === "probe.hang" && e.decision === "dispatched") widget.destroy();
       } });
-      const widget = rt.render(`<script>marzi.call("probe.hang", { tag: "late" });<\/script>`, slot, { id: "wid" });
+      const widget = rt.render(`<script>darzi.call("probe.hang", { tag: "late" });<\/script>`, slot, { id: "wid" });
     },
 
     // The state methods get the signal first, and record "dispatched" after.
     "audit-destroy-state"() {
       const rt = createRuntime({ capabilities: [], store: hangingStore, callTimeoutMs: MS, onAudit: (e) => {
         onAudit(e);
-        if (e.method === "marzi/loadState" && e.decision === "dispatched") widget.destroy();
+        if (e.method === "darzi/loadState" && e.decision === "dispatched") widget.destroy();
       } });
-      const widget = rt.render(`<script>marzi.loadState();<\/script>`, slot, { id: "wid" });
+      const widget = rt.render(`<script>darzi.loadState();<\/script>`, slot, { id: "wid" });
     },
 
     // deadlineSignal alone. It counts the timers that are still live, and the
@@ -333,9 +333,9 @@
         return value;
       } };
       createRuntime({ capabilities: [report, result], callTimeoutMs: 30000 }).render(`<script>
-        marzi.call("probe.result", { tag: "answered" })
-          .then(function () { return marzi.call("probe.result", { tag: "kept", keep: true }); })
-          .then(function () { return marzi.call("probe.report", { tag: "both-answered" }); });
+        darzi.call("probe.result", { tag: "answered" })
+          .then(function () { return darzi.call("probe.result", { tag: "kept", keep: true }); })
+          .then(function () { return darzi.call("probe.report", { tag: "both-answered" }); });
       <\/script>`, slot);
     },
 

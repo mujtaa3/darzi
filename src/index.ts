@@ -1,5 +1,5 @@
 /**
- * marzi — run LLM-generated widgets safely inside your web app.
+ * darzi — run LLM-generated widgets safely inside your web app.
  *
  * In 0.1.0, registering a capability is the authorization: every capability
  * passed to `createRuntime` is callable by every widget. Per-widget grants are

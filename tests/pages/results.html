@@ -37,16 +37,16 @@
   runtime.render(`<script>
     function time(name) {
       var t0 = performance.now();
-      return marzi.call(name).then(
+      return darzi.call(name).then(
         function (v) { return { name: name, ok: true, ms: Math.round(performance.now() - t0), value: v }; },
         function (e) { return { name: name, ok: false, ms: Math.round(performance.now() - t0), error: e.message }; });
     }
     Promise.all([time("probe.plain"), time("probe.callback"), time("probe.response"),
-                 time("probe.boom"), time("marzi/loadState")])
-      .then(function (results) { marzi.call("probe.report", { results: results }); });
+                 time("probe.boom"), time("darzi/loadState")])
+      .then(function (results) { darzi.call("probe.report", { results: results }); });
   <\/script>`, document.getElementById("slot"));
 
   // A widget that leaves the failure unhandled: a fault, after the audit line.
-  runtime.render(`<script>marzi.call("probe.boom");<\/script>`, document.getElementById("slot"), { id: "unhandled" });
+  runtime.render(`<script>darzi.call("probe.boom");<\/script>`, document.getElementById("slot"), { id: "unhandled" });
 </script>
 </body></html>

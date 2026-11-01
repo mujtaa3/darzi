@@ -43,7 +43,7 @@
       capabilities: [{ name: "probe.report", description: "result", handler: (p) => { log("REPORT " + JSON.stringify(p)); return true; } }],
       onWidgetFault: (f) => log("FAULT " + f.kind + " " + f.message),
     });
-    runtime.render(`<script>${probe('marzi.call("probe.report", out)')}<\/script>`, document.getElementById("slot"));
+    runtime.render(`<script>${probe('darzi.call("probe.report", out)')}<\/script>`, document.getElementById("slot"));
   } else {
     window.addEventListener("message", (e) => { if (e.data && e.data.control) log("REPORT " + JSON.stringify(e.data.control)); });
     const f = document.createElement("iframe");

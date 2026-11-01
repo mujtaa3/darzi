@@ -99,8 +99,8 @@
     "<script>",
     "var raw = null;",
     'window.addEventListener("message", function (e) { if (e.ports && e.ports[0]) raw = e.ports[0]; });',
-    'marzi.call("probe.report", { tag: "forged-ready" }).then(function () {',
-    '  var send = function (params) { raw.postMessage({ jsonrpc: "2.0", method: "marzi/fault", params: params }); };',
+    'darzi.call("probe.report", { tag: "forged-ready" }).then(function () {',
+    '  var send = function (params) { raw.postMessage({ jsonrpc: "2.0", method: "darzi/fault", params: params }); };',
     '  send({ message: "forged-big", line: 1000000000, column: 5 });',
     '  send({ message: "forged-negative", line: -5, column: 1 });',
     '  send({ message: "forged-string", line: "7", column: "2" });',
@@ -129,7 +129,7 @@
   // The identical twin that nobody destroys proves the fault was real.
   const armed = (tag) => lines(
     "<script>",
-    'marzi.call("probe.report", { tag: "' + tag + '" });',
+    'darzi.call("probe.report", { tag: "' + tag + '" });',
     'throw new Error("late-throw");',
     "<\/script>");
   victim = render("after-destroy", armed("armed"));

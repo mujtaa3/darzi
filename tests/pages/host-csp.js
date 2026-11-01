@@ -21,7 +21,7 @@ try {
       var b = document.createElement("button");
       b.setAttribute("onclick", "window.__handler = 'ran'");
       b.click();
-      marzi.call("probe.report", { color: color, image: document.getElementById("pixel").naturalWidth > 0 ? "loaded" : "failed", handler: window.__handler || "blocked" });
+      darzi.call("probe.report", { color: color, image: document.getElementById("pixel").naturalWidth > 0 ? "loaded" : "failed", handler: window.__handler || "blocked" });
     }
     addEventListener("load", read);
   </script>`, document.getElementById("slot"), { id: "w" });

@@ -1,5 +1,5 @@
 {
-  "name": "marzi",
+  "name": "@darzi/core",
   "version": "0.1.0",
   "description": "Run LLM-generated widgets in a sandbox inside your web app.",
   "keywords": [
@@ -18,11 +18,14 @@
   "author": "Ahmed Mujtaba",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mujtaa3/marzi.git"
+    "url": "git+https://github.com/mujtaa3/darzi.git"
   },
-  "homepage": "https://github.com/mujtaa3/marzi#readme",
+  "homepage": "https://github.com/mujtaa3/darzi#readme",
   "bugs": {
-    "url": "https://github.com/mujtaa3/marzi/issues"
+    "url": "https://github.com/mujtaa3/darzi/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "type": "module",
   "sideEffects": false,

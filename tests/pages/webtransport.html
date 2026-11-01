@@ -19,7 +19,7 @@
   if (mode === "widget") {
     createRuntime({
       capabilities: [{ name: "probe.report", description: "result", handler: (p) => { log("REPORT " + JSON.stringify(p)); return true; } }],
-    }).render(`<script>${probe('marzi.call("probe.report", out)')}<\/script>`, document.getElementById("slot"));
+    }).render(`<script>${probe('darzi.call("probe.report", out)')}<\/script>`, document.getElementById("slot"));
   } else {
     window.addEventListener("message", (e) => { if (e.data && e.data.control) log("REPORT " + JSON.stringify(e.data.control)); });
     const f = document.createElement("iframe");

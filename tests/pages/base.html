@@ -22,7 +22,7 @@
   // Each way to read the base URL, then a click on an in-page link.
   render(`<a id="link" href="#sec">jump</a><section id="sec">section</section><script>
     function read(fn) { try { return String(fn()); } catch (e) { return "THROW " + e.name; } }
-    marzi.call("probe.report", { reads: {
+    darzi.call("probe.report", { reads: {
       baseURI: read(function () { return document.baseURI; }),
       link: read(function () { return document.getElementById("link").href; }),
       newDocument: read(function () { return document.implementation.createHTMLDocument("").baseURI; }),
@@ -30,13 +30,13 @@
     } }).then(function () {
       // Click only after the host answered, so the report is not lost with the document.
       document.getElementById("link").click();
-      setTimeout(function () { marzi.call("probe.report", { alive: location.href }); }, 600);
+      setTimeout(function () { darzi.call("probe.report", { alive: location.href }); }, 600);
     });
   <\/script>`, "reader");
 
   // An inline module script takes its URL from the base URL too.
   render(`<script type="module">
-    marzi.call("probe.report", { moduleUrl: String(import.meta.url) });
+    darzi.call("probe.report", { moduleUrl: String(import.meta.url) });
   <\/script>`, "module");
 
   // Control: a frame with no sandbox and no warden reads the host URL. So the

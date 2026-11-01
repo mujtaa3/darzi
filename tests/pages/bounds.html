@@ -67,7 +67,7 @@
         ["control-short", "probe.echo", function () { return { v: [1, , 3] }; }],
         // About 52 KB on the wire: 9998 references to one array of 10000 holes.
         ["holes", "probe.echo", function () { var a = []; a.length = 10000; return { v: new Array(9998).fill(a) }; }],
-        ["holes-state", "marzi/saveState", function () { var a = []; a.length = 10000; return { value: new Array(9998).fill(a) }; }]
+        ["holes-state", "darzi/saveState", function () { var a = []; a.length = 10000; return { value: new Array(9998).fill(a) }; }]
       ],
       method: [
         ["control-short", "nope", function () { return {}; }],
@@ -91,17 +91,17 @@
     };
     function run(i) {
       var s = STEPS[probe][i];
-      if (!s) { marzi.call("probe.mark", { step: "done" }); return; }
-      marzi.call("probe.mark", { step: s[0] + ":start" })
+      if (!s) { darzi.call("probe.mark", { step: "done" }); return; }
+      darzi.call("probe.mark", { step: s[0] + ":start" })
         .then(function () {
           // A value that the engine cannot build is reported, so the steps go on.
           var params;
           try { params = s[2](); } catch (e) { return "build failed: " + e.name + " " + e.message; }
-          return marzi.call(s[1], params).then(
+          return darzi.call(s[1], params).then(
             function () { return "ok"; },
             function (e) { return "refused, reply length " + String(e.message).length; });
         })
-        .then(function (outcome) { return marzi.call("probe.mark", { step: s[0] + ":end " + outcome }); })
+        .then(function (outcome) { return darzi.call("probe.mark", { step: s[0] + ":end " + outcome }); })
         .then(function () { run(i + 1); });
     }
     run(0);

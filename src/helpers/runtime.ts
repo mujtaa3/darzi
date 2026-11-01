@@ -57,7 +57,7 @@ export function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<
  * first. Its reason is a TimeoutError, or the parent's reason.
  *
  * It does the work of `AbortSignal.any([parent, AbortSignal.timeout(ms)])`.
- * Those two functions are newer than all else that marzi needs. Safari got `any`
+ * Those two functions are newer than all else that darzi needs. Safari got `any`
  * only in 17.4, and `timeout` only in 16.
  *
  * The first to happen removes the other, because a widget can live for a long
@@ -94,7 +94,7 @@ export function abandonReason(widget: LiveWidget): string {
  * Cut widget text to `max` UTF-16 units or fewer, without splitting a
  * surrogate pair. JavaScript counts string length in UTF-16 units, and a
  * character outside the Basic Multilingual Plane (most emoji) takes two. A cut
- * between the two would give the host broken text that marzi itself made.
+ * between the two would give the host broken text that darzi itself made.
  */
 export function clampText(text: string, max: number): string {
   if (text.length <= max) return text;

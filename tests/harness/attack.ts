@@ -58,7 +58,7 @@ export async function openAttack(page: Page, name: string): Promise<Attack> {
 
 /**
  * Remove `AbortSignal.any` and `AbortSignal.timeout` from each document of this
- * page, before its scripts run. Call it before `openAttack`. marzi must not need
+ * page, before its scripts run. Call it before `openAttack`. darzi must not need
  * them: Safari got `any` only in 17.4, and `timeout` only in 16.
  */
 export async function removeNewAbortFunctions(page: Page): Promise<void> {

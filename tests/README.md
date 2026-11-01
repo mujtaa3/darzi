@@ -8,7 +8,7 @@ npm test                                 # build, then every attack in three bro
 ```
 
 In the attack suite, hostile widgets try to escape the jail, leak data, and do
-more than marzi allows. The attacks are in
+more than darzi allows. The attacks are in
 [`tests/attacks/`](attacks/) in the repo. They are not in the npm package, so run them from a clone. Each test that
 expects an attack to fail has a positive control. The control runs the same
 attack without the defense and expects it to succeed.
@@ -36,9 +36,9 @@ browsers that users install. The results:
 
 - No widget request reached the witness.
 - In both WebKit builds, an `<object>` element crashed the page, also on a page
-  with no marzi.
+  with no darzi.
 - In Firefox 97, a canvas call can fail in two nested sandboxed frames, also with
-  no marzi. A widget that draws can then report a `script-error` fault.
+  no darzi. A widget that draws can then report a `script-error` fault.
 - In both WebKit builds and Firefox 97, WebAssembly compiles in a widget, because
   these engines do not apply the CSP to it.
 - Most tests of your page's CSP could not run on these builds, because the old

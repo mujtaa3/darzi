@@ -5,7 +5,7 @@
  */
 
 /**
- * The only sandbox token that marzi gives. All other permissions stay off:
+ * The only sandbox token that darzi gives. All other permissions stay off:
  * same origin, popups, top navigation, forms and modals.
  */
 export const SANDBOX_TOKENS = "allow-scripts";
@@ -16,7 +16,7 @@ export const SANDBOX_TOKENS = "allow-scripts";
  *
  * A CSP (Content-Security-Policy) is a list of rules for one document. Each
  * rule is a directive: a type of load, and the sources that it allows. For
- * example, `img-src data:` allows images only from `data:` URLs. marzi puts
+ * example, `img-src data:` allows images only from `data:` URLs. darzi puts
  * this CSP in a `<meta>` tag at the top of the widget's document (see
  * `scaffold`).
  *
@@ -80,7 +80,7 @@ export const WARDEN_BASE_URL = "about:srcdoc";
  * URL of the page that the request came from. App URLs often contain ids and
  * tokens, so that header could tell an outside server about the host page. A
  * referrer policy controls how much of that URL a request sends, and
- * `no-referrer` sends nothing. marzi sets it as the `referrerpolicy` attribute
+ * `no-referrer` sends nothing. darzi sets it as the `referrerpolicy` attribute
  * of both iframes (see `warden`, and `render` in runtime.ts).
  *
  * This is a backstop with an uncertain effect. The attribute controls the
