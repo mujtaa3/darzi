@@ -37,6 +37,14 @@ async function openUnder(page: import("@playwright/test").Page, policy: string) 
   return attack;
 }
 
+test("require-trusted-types-for: render throws, and leaves nothing behind", async ({ page }) => {
+  const attack = await openUnder(page, "require-trusted-types-for 'script'");
+  await attack.untilLog("THROW TypeError");
+  await attack.untilLog("PAST-START-TIMEOUT");
+  expect(await attack.logged("FAULT "), "no false never-started").toEqual([]);
+  await expect(page.locator("iframe"), "no frame").toHaveCount(0);
+});
+
 for (const policy of NO_START) {
   test(`${policy}: no widget starts, and the host hears why`, async ({ page }) => {
     const attack = await openUnder(page, policy);

@@ -222,7 +222,9 @@ reports `never-started`. These CSPs block inline scripts: `script-src 'self'`,
 `default-src 'self'`, and any nonce or hash policy. If a CSP directive has a
 nonce, the browser ignores `'unsafe-inline'` in that directive. A `style-src`
 limit removes widget styles, and an `img-src` limit removes widget `data:`
-images. Tests in Chrome, WebKit, and Firefox show this behavior.
+images. A page with `require-trusted-types-for 'script'` cannot show widgets,
+because `render` throws a `TypeError`. Tests in Chrome, WebKit, and Firefox show
+this behavior.
 
 Pages that show widgets need a CSP that allows inline scripts and inline
 styles. If your app uses a strict CSP, give a less strict CSP only to the pages
