@@ -137,13 +137,15 @@ also check that the signed-in user owns that `id`.
 
 **Getting the HTML.** marzi never calls a model. Your app calls the model:
 
-1. Replace the placeholders in `prompts/widget-author.md` (or
-   `widget-refine.md`) with your values. Replace all placeholders in one pass,
-   so that the text of one value cannot fill another placeholder.
-2. Send the result to your model.
-3. Split the reply. It has four blocks: `<title>`, `<capabilities>`, `<libs>` and
+1. Take the text of `prompts/widget-author.md` (or `widget-refine.md`) after its
+   `---` line, for example with `template.split("\n---\n")[1]`. The text above
+   that line is for you, not for the model.
+2. Replace the placeholders with your values. Replace all placeholders in one
+   pass, so that the text of one value cannot fill another placeholder.
+3. Send the result to your model.
+4. Split the reply. It has four blocks: `<title>`, `<capabilities>`, `<libs>` and
    `<widget>`. Do not give the whole reply to `render`.
-4. Give the text of `<widget>` to `render`, and the names in `<libs>` to its
+5. Give the text of `<widget>` to `render`, and the names in `<libs>` to its
    `libs` option.
 
 ```js
@@ -323,8 +325,8 @@ in the widget.
    that widget just before the fault: `capability failed`, `state operation
    failed`, `timed out` or `result not cloneable`. Each one is a failure in your
    code, not in the widget.
-3. When the user clicks the button, fill in `prompts/widget-repair.md` with the
-   widget HTML and the fault.
+3. When the user clicks the button, take the text of `prompts/widget-repair.md`
+   after its `---` line, and fill it in with the widget HTML and the fault.
 4. Send the result to your model.
 5. Split the reply as in "Getting the HTML", and render it as the next version
    of the widget.
