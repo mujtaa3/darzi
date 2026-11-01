@@ -54,13 +54,19 @@ export const WIDGET_CSP = [
 ].join("; ");
 
 /**
- * The device features that the frame may ask for. An empty value means none.
+ * The device features that the frame may ask for. An empty value adds no
+ * features.
  *
  * Permissions Policy is separate from the sandbox and the CSP. It controls the
  * camera, the microphone, location, sensors, payment and similar features.
  * Without it, a widget could show a browser permission prompt that seems to
  * come from the host app. That is a phishing risk, whether the user accepts
  * or declines.
+ *
+ * Each feature has a default. A feature with the default `self` stays denied,
+ * because the frame's origin is opaque: the camera, the microphone and location.
+ * A feature with the default `*` stays allowed: Chrome 156 lists 17 for a widget,
+ * for example `gamepad` and `picture-in-picture` (tested).
  */
 export const FRAME_ALLOW = "";
 
