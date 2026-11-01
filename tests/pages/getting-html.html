@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>getting html</title></head>
+<body>
+<div id="slot"></div>
+<script type="module">
+  import { createRuntime } from "/dist/index.js";
+  window.__log = [];
+  const log = (s) => window.__log.push(s);
+
+  const runtime = createRuntime({
+    capabilities: [{ name: "probe.report", description: "result", handler: (p) => { log("REPORT " + JSON.stringify(p)); return true; } }],
+    libraries: [
+      { name: "lib-a", source: "window.LIB_A = 1;" },
+      { name: "lib-b", source: "window.LIB_B = 1;" },
+      { name: "lib-c", source: "window.LIB_C = 1;" },
+    ],
+  });
+
+  // A reply in the form that the templates ask for. The widget code has the
+  // closing tag in a string, so a split at the first one would cut the code.
+  const reply = (libs) => `<title>A short name</title>
+<capabilities>declared.capability</capabilities>
+<libs>${libs}</libs>
+<widget>
+<p>real widget</p>
+<script>
+  var closing = "</widget>";
+  marzi.call("probe.report", {
+    closing: closing,
+    text: document.body.textContent,
+    libs: [typeof LIB_A, typeof LIB_B, typeof LIB_C].join(),
+  });
+<\/script>
+</widget>`;
+
+  // The same lines as the README's "Getting the HTML".
+  function split(reply) {
+    const start = reply.indexOf("<widget>");
+    const end = reply.lastIndexOf("</widget>");
+    if (start < 0 || end < start) throw new Error("the reply has no <widget> block");
+    const html = reply.slice(start + "<widget>".length, end);
+    const libs = (/<libs>(.*?)<\/libs>/s.exec(reply)?.[1] ?? "")
+      .split(",").map((name) => name.trim()).filter(Boolean);
+    return { html, libs };
+  }
+
+  const slot = document.getElementById("slot");
+  const scenario = new URLSearchParams(location.search).get("reply");
+  if (scenario === "whole") runtime.render(reply("lib-a"), slot);
+  if (scenario === "libs") {
+    const { html, libs } = split(reply("lib-a, lib-b"));
+    log("LIBS " + JSON.stringify(libs));
+    runtime.render(html, slot, { libs });
+  }
+  if (scenario === "no-libs") {
+    const { html, libs } = split(reply(""));
+    log("LIBS " + JSON.stringify(libs));
+    runtime.render(html, slot, { libs });
+  }
+  if (scenario === "cut") {
+    try { split("<title>x</title>\n<libs></libs>\n<widget>\n<p>a reply that stops he"); log("NO-THROW"); }
+    catch (e) { log("THROW " + e.message); }
+  }
+</script>
+</body></html>

@@ -137,7 +137,25 @@ also check that the signed-in user owns that `id`.
    `widget-refine.md`) with your values. Replace all placeholders in one pass,
    so that the text of one value cannot fill another placeholder.
 2. Send the result to your model.
-3. Give the HTML that the model returns to `render`.
+3. Split the reply. It has four blocks: `<title>`, `<capabilities>`, `<libs>` and
+   `<widget>`. Do not give the whole reply to `render`.
+4. Give the text of `<widget>` to `render`, and the names in `<libs>` to its
+   `libs` option.
+
+```js
+// To the LAST </widget>, because widget code can contain that text in a string.
+const start = reply.indexOf("<widget>");
+const end = reply.lastIndexOf("</widget>");
+if (start < 0 || end < start) throw new Error("the reply has no <widget> block");
+const html = reply.slice(start + "<widget>".length, end);
+const libs = (/<libs>(.*?)<\/libs>/s.exec(reply)?.[1] ?? "")
+  .split(",").map((name) => name.trim()).filter(Boolean);
+
+runtime.render(html, document.getElementById("slot"), { libs });
+```
+
+`<title>` is a name to show to the user. `<capabilities>` lists the names that
+the widget says it calls. In 0.1.0, nothing enforces that list.
 
 The templates teach the model the rules of the jail. All three templates are in
 the package. On a server, find a template with
@@ -146,7 +164,8 @@ the package. On a server, find a template with
 To use a library such as a charting library, put a copy of its source code in
 your app. Give that source code to marzi in the `libraries` option. marzi adds
 the source code to the widget's frame as an inline script, because the frame can
-never fetch it.
+never fetch it. A widget gets only the libraries that `libs` names. `render`
+throws for a name that you did not register.
 
 ## What marzi promises and does not promise
 
@@ -290,7 +309,8 @@ in the widget.
 3. When the user clicks the button, fill in `prompts/widget-repair.md` with the
    widget HTML and the fault.
 4. Send the result to your model.
-5. Render the HTML that the model returns as the next version of the widget.
+5. Split the reply as in "Getting the HTML", and render it as the next version
+   of the widget.
 
 The header of the template tells you how to write the fault into the prompt.
 Let the user start each repair. A widget can fail many times, and each repair
