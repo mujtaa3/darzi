@@ -119,6 +119,9 @@
       const rt = createRuntime({ capabilities: [reporting()], startTimeoutMs: 500, onAudit, onWidgetFault });
       rt.render("<p>orphan</p>", document.createElement("div"), { id: "orphan" });
       rt.render(`<script>marzi.call("probe.report", { tag: "alive" });<\/script>`, slot, { id: "alive" });
+      // Widget code cannot cause this fault, because the stub says "ready" first.
+      rt.render(`<script>window.marzi = null; window.postMessage = null;<\/script>`, slot, { id: "stub-overwritten" });
+      rt.render(`<script>location.replace("${location.origin}/elsewhere");<\/script>`, slot, { id: "navigates-at-once" });
       setTimeout(() => log("BEFORE-THE-TIMEOUT"), 300);
       setTimeout(() => log("AFTER-THE-TIMEOUT"), 800);
       addSibling(`setInterval(function () { parent.postMessage({ marzi: "ready" }, "*"); }, 50);`);

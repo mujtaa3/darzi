@@ -13,9 +13,10 @@ export interface WidgetFault {
   /** The widget, taken from its port. */
   widgetId: string;
   /**
-   * `never-started`: the frame did not complete its handshake. Causes: a broken
-   * scaffold, a widget that disabled the stub, or a frame that navigated away
-   * while it loaded.
+   * `never-started`: the frame did not complete its handshake. The usual cause
+   * is a host CSP that blocks inline scripts. Another is a container that is not
+   * on the page in time. Widget code does not cause it, because the stub says
+   * "ready" before the browser reads the widget HTML (tested).
    *
    * `script-error`: the widget's code threw an error, or one of its promises
    * failed and no code handled the failure.
