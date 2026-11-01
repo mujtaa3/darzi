@@ -32,7 +32,8 @@ development will fail here:
 - **No external resources.** No `<script src>`, no stylesheets, fonts, or
   images from anywhere. No CDNs.
 - **No storage.** `localStorage` and `sessionStorage` throw; no cookies.
-- **No access to the surrounding page**, no dialogs, no navigation.
+- **No access to the surrounding page**, no dialogs, no navigation. A link that
+  leaves the widget, or a change of `location`, turns the widget blank.
 - **No inline event handlers.** Use `addEventListener`, not `onclick=`
   attributes. A host's security policy may block them.
 - **No `eval` and no WebAssembly.** `eval`, `new Function` and `WebAssembly` all

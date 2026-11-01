@@ -37,7 +37,8 @@ habits from ordinary web development will fail here:
   and related APIs). The host refuses to run any widget whose code mentions
   them, anywhere — even in a comment.
 - **No dialogs or navigation.** `alert`, `confirm`, `prompt`, `window.open`,
-  form submission, and changing `location` are all unavailable or useless.
+  form submission, and changing `location` are all unavailable or useless. A
+  link that leaves the widget, or a change of `location`, turns the widget blank.
 
 What you *do* have: plain HTML, inline `<style>`, inline `<script>`, the DOM,
 inline SVG, `<canvas>`, and everything built into JavaScript. That is enough to

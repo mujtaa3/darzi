@@ -300,6 +300,10 @@ two kinds:
 - `script-error`: the widget's code threw an error. A promise in the widget
   that failed with no handler also gives this kind.
 
+One failure gives no fault. A widget that navigates itself, for example with a
+link or `location`, goes blank. The warden blocks the navigation, so nothing
+leaves, but your page gets no signal.
+
 A `script-error` fault can also have these fields:
 
 | Field | What |
