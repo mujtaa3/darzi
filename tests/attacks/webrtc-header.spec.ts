@@ -4,12 +4,12 @@
  *
  * The header lists where a page and its frames may connect, and it blocks WebRTC
  * unless it says `webrtc=allow`. A `srcdoc` frame inherits it. So the host sends
- * it, and marzi cannot.
+ * it, and darzi cannot.
  *
  * TESTED 2026-10-31, Chrome 156 on desktop: a widget that tries WebRTC sends
  * nothing. Chrome also closes the widget's process ("No binder found for
  * interface network.mojom.MdnsResponder"), and sibling widgets in that process
- * stop, with no fault. The host page lives, because marzi's sandboxed frames run
+ * stop, with no fault. The host page lives, because darzi's sandboxed frames run
  * in another process. A plain same-origin frame shares the host's process, and
  * there the whole page dies. This looks like a Chrome bug, so the test does not
  * require the process to close. It requires what a host relies on: no traffic,

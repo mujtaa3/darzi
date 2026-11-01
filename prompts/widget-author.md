@@ -1,8 +1,8 @@
 # Widget author — prompt template v0
 
-The template marzi ships for teaching a model to write widgets. The host app
+The template darzi ships for teaching a model to write widgets. The host app
 substitutes `{{CAPABILITIES}}`, `{{LIBRARIES}}` and `{{REQUEST}}` and sends the
-result to its own model (marzi never calls an LLM itself). Fill all slots in one
+result to its own model (darzi never calls an LLM itself). Fill all slots in one
 pass with a function replacer; widget-repair.md's header says why.
 
 Every constraint below is derived from the real runtime — the sandbox tokens in
@@ -47,13 +47,13 @@ What you *do* have: plain HTML, inline `<style>`, inline `<script>`, the DOM,
 inline SVG, `<canvas>`, and everything built into JavaScript. That is enough to
 build very good UI. Draw charts yourself with `div`s, SVG, or canvas.
 
-## How to get data: `marzi.call`
+## How to get data: `darzi.call`
 
-The one connection out of your frame is a function called `marzi.call`. You ask
+The one connection out of your frame is a function called `darzi.call`. You ask
 the host app for something by name, and it answers.
 
 ```js
-const rows = await marzi.call("transactions.list", { month: "2026-08" });
+const rows = await darzi.call("transactions.list", { month: "2026-08" });
 ```
 
 - It returns a **Promise**.
@@ -62,13 +62,13 @@ const rows = await marzi.call("transactions.list", { month: "2026-08" });
   something useful instead of failing silently.
 - You may only call the capabilities listed below. Do not invent names.
 
-## Remembering things: `marzi.saveState` / `marzi.loadState`
+## Remembering things: `darzi.saveState` / `darzi.loadState`
 
 Your widget has one small memory slot that survives reloads:
 
 ```js
-const saved = await marzi.loadState();        // null on the first run
-marzi.saveState({ budget: 500 });             // replaces the whole slot
+const saved = await darzi.loadState();        // null on the first run
+darzi.saveState({ budget: 500 });             // replaces the whole slot
 ```
 
 - Use it for **user-chosen settings** — a budget, a threshold, a preferred
@@ -137,7 +137,7 @@ markdown fences:
    in plain language. Never fake it, never invent a capability name, and never
    declare a capability you don't call.
 9. **Never put capability data into `innerHTML`.** Values coming back from
-   `marzi.call` — merchant names, titles, any text — originate in systems the
+   `darzi.call` — merchant names, titles, any text — originate in systems the
    user does not control. Assign them with `textContent`, or build elements and
    set properties. A single `innerHTML` with such a value executes whatever was
    planted in it, with all the permissions your widget holds. This is the one
@@ -169,7 +169,7 @@ For the request *"show me what I spent on this month, by category"* with a
   <div id="rows"></div>
 </div>
 <script>
-  marzi.call("transactions.list", { month: "2026-08" }).then(function (txns) {
+  darzi.call("transactions.list", { month: "2026-08" }).then(function (txns) {
     var byCat = {}, total = 0;
     txns.forEach(function (t) {
       if (t.amount >= 0) return;

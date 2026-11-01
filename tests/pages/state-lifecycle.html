@@ -33,25 +33,25 @@
   const timed = (tag, expr) => `<script>
     var t0 = performance.now();
     ${expr}.then(
-      function (v) { marzi.call("probe.report", { tag: "${tag}", ok: true, value: v, ms: Math.round(performance.now() - t0) }); },
-      function (e) { marzi.call("probe.report", { tag: "${tag}", ok: false, error: e.message, ms: Math.round(performance.now() - t0) }); });
+      function (v) { darzi.call("probe.report", { tag: "${tag}", ok: true, value: v, ms: Math.round(performance.now() - t0) }); },
+      function (e) { darzi.call("probe.report", { tag: "${tag}", ok: false, error: e.message, ms: Math.round(performance.now() - t0) }); });
   <\/script>`;
 
   // 1. Deadline: a store that never answers is cut off at callTimeoutMs.
   const deadline = createRuntime({ capabilities: [report], store: hangingStore("deadline"), callTimeoutMs: 400, onAudit });
-  deadline.render(timed("deadline-save", "marzi.saveState({ n: 1 })"), slot, { id: "wid-save" });
-  deadline.render(timed("deadline-load", "marzi.loadState()"), slot, { id: "wid-load" });
+  deadline.render(timed("deadline-save", "darzi.saveState({ n: 1 })"), slot, { id: "wid-save" });
+  deadline.render(timed("deadline-load", "darzi.loadState()"), slot, { id: "wid-load" });
 
   // 2. Destroy mid-write: the write's signal aborts the moment the widget goes.
   const teardown = createRuntime({ capabilities: [report], store: hangingStore("destroy"), onAudit });
   const putStarted = new Promise((resolve) => { started["destroyput"] = resolve; });
-  const doomed = teardown.render(`<script>marzi.saveState({ n: 2 });<\/script>`, slot, { id: "wid-doomed" });
+  const doomed = teardown.render(`<script>darzi.saveState({ n: 2 });<\/script>`, slot, { id: "wid-doomed" });
   await putStarted;
   doomed.destroy();
   log("DESTROYED wid-doomed");
 
   // 3. Control: a healthy store still round-trips.
   const healthy = createRuntime({ capabilities: [report], store: memoryStore(), onAudit });
-  healthy.render(timed("healthy", "marzi.saveState({ n: 7 }).then(function () { return marzi.loadState(); })"), slot, { id: "wid-ok" });
+  healthy.render(timed("healthy", "darzi.saveState({ n: 7 }).then(function () { return darzi.loadState(); })"), slot, { id: "wid-ok" });
 </script>
 </body></html>

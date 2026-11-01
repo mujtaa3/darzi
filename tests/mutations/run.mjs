@@ -62,7 +62,7 @@ const MUTATIONS = [
     [RUNTIME, "options.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS", "DEFAULT_START_TIMEOUT_MS"]] },
   { name: "destroy-keeps-lent-port", spec: "handshake-edges", edits: [
     [RUNTIME, `window.removeEventListener("message", onKnock);\n        closePort();`, `window.removeEventListener("message", onKnock);`]] },
-  { name: "prefix-not-reserved", spec: "ids", edits: [[RUNTIME, `if (capability.name.startsWith("marzi/")) {`, `if (capability.name === "marzi/") {`]] },
+  { name: "prefix-not-reserved", spec: "ids", edits: [[RUNTIME, `if (capability.name.startsWith("darzi/")) {`, `if (capability.name === "darzi/") {`]] },
   { name: "no-store-seems-to-work", spec: "attacks/state", edits: [[RUNTIME, `if (!options.store) return refuse("no store configured");`, "if (!options.store) return ok(id, null);"]] },
   { name: "state-limit-ignored", spec: "attacks/state", edits: [
     [RUNTIME, "const stateLimit = options.stateLimitBytes ?? DEFAULT_STATE_LIMIT_BYTES;", "const stateLimit = DEFAULT_STATE_LIMIT_BYTES;"]] },
@@ -122,7 +122,7 @@ const MUTATIONS = [
 
 /** Copy the repo, apply the edits, run the specs, and return what each engine did. */
 function run(edits, specs, flags = []) {
-  const dir = mkdtempSync(join(tmpdir(), "marzi-mutation-"));
+  const dir = mkdtempSync(join(tmpdir(), "darzi-mutation-"));
   try {
     for (const item of COPIED) cpSync(join(REPO, item), join(dir, item), { recursive: true });
     symlinkSync(join(REPO, "node_modules"), join(dir, "node_modules"));

@@ -24,7 +24,7 @@
     var chart = new Chart(document.getElementById("c"), {
       type: "bar", data: { labels: ["a", "b"], datasets: [{ data: [1, 2] }] },
       options: { animation: false, responsive: false } });
-    marzi.call("probe.report", { tag: "libs", chart: typeof Chart, points: chart.data.datasets[0].data.length,
+    darzi.call("probe.report", { tag: "libs", chart: typeof Chart, points: chart.data.datasets[0].data.length,
       pixels: document.getElementById("c").toDataURL().length, trap: window.TRAP });
   <\/script>`, document.getElementById("slot"), { libs: ["chartjs", "trap"] });
 

@@ -27,14 +27,14 @@ export interface RuntimeOptions {
    * Character sequences that make `render` refuse widget HTML that contains
    * any of them. See `DEFAULT_FORBIDDEN_TEXT` for what this can and cannot do.
    *
-   * This list is complete: marzi adds nothing to it. To extend the default,
+   * This list is complete: darzi adds nothing to it. To extend the default,
    * give `[...DEFAULT_FORBIDDEN_TEXT, "x"]`. To replace it, give your own list.
    * To turn it off, give `[]`. Matching is exact and case-sensitive. Library
    * sources are not checked, because they are the host's own text.
    */
   forbiddenText?: readonly string[];
   /**
-   * Where `marzi.saveState` and `marzi.loadState` save and load. Without a
+   * Where `darzi.saveState` and `darzi.loadState` save and load. Without a
    * store, the runtime refuses those calls. The store gets an opaque JSON
    * string for each widget id, and it never needs to read the state.
    */

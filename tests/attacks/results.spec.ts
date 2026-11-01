@@ -43,9 +43,9 @@ test("a failed or unsendable call fails fast, tells the widget nothing internal,
   // A handler that throws, and a store that throws: generic text for the
   // widget, a failure in the audit, and the real message nowhere in the page.
   expect(by["probe.boom"]).toMatchObject({ ok: false, error: "capability failed" });
-  expect(by["marzi/loadState"]).toMatchObject({ ok: false, error: "state operation failed" });
+  expect(by["darzi/loadState"]).toMatchObject({ ok: false, error: "state operation failed" });
   expect(audits).toContain("probe.boom refused · capability failed");
-  expect(audits).toContain("marzi/loadState refused · state operation failed");
+  expect(audits).toContain("darzi/loadState refused · state operation failed");
   expect((await attack.log()).filter((l) => l.includes("SECRET"))).toEqual([]);
 
   // Left unhandled, the failure becomes the widget's fault — and the host has

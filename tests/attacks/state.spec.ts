@@ -33,8 +33,8 @@ test("saved state comes back to its own widget only, cleaned and capped", async 
   // With no store, state calls are refused and audited, and nothing is dispatched.
   expect(by["no-store-save"]).toMatchObject({ err: "no store configured" });
   expect(by["no-store-load"]).toMatchObject({ err: "no store configured" });
-  expect(audits).toContain("marzi/loadState refused · no store configured");
+  expect(audits).toContain("darzi/loadState refused · no store configured");
 
   // big, cycle, euro-over, over-limit, and no store.
-  expect(audits.filter((a) => a.startsWith("marzi/saveState refused")).length).toBe(5);
+  expect(audits.filter((a) => a.startsWith("darzi/saveState refused")).length).toBe(5);
 });

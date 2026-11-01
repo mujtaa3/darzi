@@ -3,7 +3,7 @@
  * notifications, plus two internal types of the checks in helpers/rpc.ts.
  *
  * ⚠️ TypeScript removes these types at compile time. They describe the shape
- * that marzi expects. Only `readId`, `parseRequest` and `parseNotification` in
+ * that darzi expects. Only `readId`, `parseRequest` and `parseNotification` in
  * helpers/rpc.ts check it, because a widget can send any value at all.
  */
 
@@ -17,7 +17,7 @@ export type RpcId = string | number;
 export interface RpcRequest {
   jsonrpc: "2.0";
   id: RpcId;
-  /** A capability name, or a built-in such as "marzi/saveState". */
+  /** A capability name, or a built-in such as "darzi/saveState". */
   method: string;
   /** Anything. The widget chose it, so `sanitizeParams` must clean it. */
   params?: unknown;
@@ -35,7 +35,7 @@ export interface RpcResponse {
  * A notification: a message with NO id, so it gets no reply.
  *
  * A widget sends one to tell the host something, not to ask for something.
- * Today there is only one: `marzi/fault`, when the widget's code throws.
+ * Today there is only one: `darzi/fault`, when the widget's code throws.
  */
 export interface RpcNotification {
   jsonrpc: "2.0";

@@ -23,7 +23,7 @@ import { WARDEN_BASE_URL } from "../consts/jail.js";
  * the correct place.
  *
  * This is for correctness, not security: a broken library still runs inside
- * the jail. The stub needs no fix, because marzi wrote it. The widget HTML
+ * the jail. The stub needs no fix, because darzi wrote it. The widget HTML
  * needs none, because its <script> tags are meant to be HTML.
  * tests/pages/libraries.html tests it with a library that contains `</script>`.
  */

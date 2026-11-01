@@ -62,10 +62,10 @@
   });
   runtime.render(`<script>
     window.addEventListener("message", function (e) {
-      if (e.data && e.data.ran) marzi.call("probe.report", { ran: e.data.ran });
+      if (e.data && e.data.ran) darzi.call("probe.report", { ran: e.data.ran });
     });
     (${probe})(${JSON.stringify(WITNESS)}, "widget");
-    setTimeout(function () { marzi.call("probe.report", {}); }, 1000);
+    setTimeout(function () { darzi.call("probe.report", {}); }, 1000);
   <\/script>`, document.getElementById("slot"));
 
   // Control: the same probes from a plain frame with no sandbox and no CSP.

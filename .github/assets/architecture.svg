@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1020" height="590" viewBox="0 0 1020 590" role="img" aria-labelledby="t d">
-  <title id="t">How marzi contains a widget</title>
-  <desc id="d">Your page sends the user's request to your server. Your server fills a prompt template from marzi, calls your model, and returns model-generated widget HTML. Your page holds your code, the marzi runtime and your capability handlers, which call your API. One channel, with JSON-RPC 2.0 messages, crosses the trust boundary to the jail. The jail holds the warden frame and, inside it, the widget frame. The browser blocks network requests, self-navigation and access to your page. WebRTC and DNS prefetch are residual risks.</desc>
+  <title id="t">How darzi contains a widget</title>
+  <desc id="d">Your page sends the user's request to your server. Your server fills a prompt template from darzi, calls your model, and returns model-generated widget HTML. Your page holds your code, the darzi runtime and your capability handlers, which call your API. One channel, with JSON-RPC 2.0 messages, crosses the trust boundary to the jail. The jail holds the warden frame and, inside it, the widget frame. The browser blocks network requests, self-navigation and access to your page. WebRTC and DNS prefetch are residual risks.</desc>
   <defs>
     <style>
       text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; fill: #aeb6c2; }
@@ -27,7 +27,7 @@
   <rect x="30" y="92" width="188" height="98" rx="8" class="box"/>
   <text x="44" y="116" class="title">generation</text>
   <text x="44" y="138">fills a prompt template</text>
-  <text x="44" y="157">from marzi: <tspan class="mono">prompts/*.md</tspan></text>
+  <text x="44" y="157">from darzi: <tspan class="mono">prompts/*.md</tspan></text>
   <text x="44" y="176">sends it to your model</text>
   <rect x="30" y="446" width="188" height="112" rx="8" class="box"/>
   <text x="44" y="472" class="title">your API</text>
@@ -48,7 +48,7 @@
   <text x="440" y="208" class="mono" fill="#d6dbe2">render(html, slot)</text>
 
   <rect x="322" y="224" width="272" height="172" rx="8" fill="#1a1c21" stroke="#4a86e0" stroke-width="1.4"/>
-  <text x="336" y="250" class="title">marzi runtime</text>
+  <text x="336" y="250" class="title">darzi runtime</text>
   <rect x="334" y="262" width="248" height="36" rx="5" class="inner"/>
   <text x="348" y="285" class="row">registry · name → handler</text>
   <rect x="334" y="304" width="248" height="36" rx="5" class="inner"/>
@@ -98,7 +98,7 @@
   <text x="722" y="208" class="mono">default-src 'none'</text>
 
   <rect x="720" y="220" width="230" height="36" rx="5" class="inner"/>
-  <text x="734" y="243" class="row">stub → <tspan class="mono">window.marzi</tspan></text>
+  <text x="734" y="243" class="row">stub → <tspan class="mono">window.darzi</tspan></text>
   <rect x="720" y="262" width="230" height="36" rx="5" class="inner"/>
   <text x="734" y="285" class="row">your vendored libraries</text>
   <rect x="720" y="304" width="230" height="36" rx="5" fill="#43261c" stroke="#d9683a" stroke-width="1.3"/>

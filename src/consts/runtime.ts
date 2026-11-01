@@ -4,7 +4,7 @@
  * encoder that measures saved state.
  */
 
-/** Library version, exported so a host can record which marzi produced a log line or a saved widget. */
+/** Library version, exported so a host can record which darzi produced a log line or a saved widget. */
 export const VERSION = "0.1.0";
 
 /**

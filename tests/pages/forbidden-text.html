@@ -26,7 +26,7 @@
   const standard = createRuntime({ capabilities, onAudit });
   attempt("default-hit", standard, `<p>This widget mentions RTCPeerConnection in plain text.</p>`);
   // Control: a clean body renders and reaches the switchboard.
-  attempt("default-clean", standard, `<script>marzi.call("probe.report", { tag: "clean" });<\/script>`);
+  attempt("default-clean", standard, `<script>darzi.call("probe.report", { tag: "clean" });<\/script>`);
 
   // A host's own list REPLACES the default — nothing merged behind its back.
   const custom = createRuntime({ capabilities, onAudit, forbiddenText: ["forbidden-word"] });

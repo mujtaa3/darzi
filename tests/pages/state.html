@@ -22,63 +22,63 @@
   // Save under A, with an OWN __proto__ key (from JSON.parse, since an object
   // literal would set the prototype instead of creating a key).
   let w = run(`
-    await marzi.saveState(JSON.parse('{"n":42,"__proto__":{"polluted":true}}'));
-    await marzi.call("probe.report", { tag: "saved" });`, "wid-A");
+    await darzi.saveState(JSON.parse('{"n":42,"__proto__":{"polluted":true}}'));
+    await darzi.call("probe.report", { tag: "saved" });`, "wid-A");
   await waitFor("saved"); w.destroy();
 
   // A fresh render under the SAME id gets it back, clean.
   w = run(`
-    var s = await marzi.loadState();
-    await marzi.call("probe.report", { tag: "load-A", n: s.n,
+    var s = await darzi.loadState();
+    await darzi.call("probe.report", { tag: "load-A", n: s.n,
       protoKey: Object.prototype.hasOwnProperty.call(s, "__proto__"), polluted: ({}).polluted !== undefined });`, "wid-A");
   await waitFor("load-A"); w.destroy();
 
   // A different id sees nothing.
-  w = run(`var s = await marzi.loadState(); await marzi.call("probe.report", { tag: "load-B", value: s });`, "wid-B");
+  w = run(`var s = await darzi.loadState(); await darzi.call("probe.report", { tag: "load-B", value: s });`, "wid-B");
   await waitFor("load-B"); w.destroy();
 
   // Oversize and cyclic are refused, and the widget hears why.
   w = run(`
-    try { await marzi.saveState({ big: "x".repeat(100000) }); } catch (e) { await marzi.call("probe.report", { tag: "big", err: e.message }); }
-    try { var a = {}; a.self = a; await marzi.saveState(a); } catch (e) { await marzi.call("probe.report", { tag: "cycle", err: e.message }); }`, "wid-C");
+    try { await darzi.saveState({ big: "x".repeat(100000) }); } catch (e) { await darzi.call("probe.report", { tag: "big", err: e.message }); }
+    try { var a = {}; a.self = a; await darzi.saveState(a); } catch (e) { await darzi.call("probe.report", { tag: "cycle", err: e.message }); }`, "wid-C");
   await waitFor("cycle"); w.destroy();
 
   // The cap counts UTF-8 bytes. "\u20ac" (the euro sign) is 1 UTF-16 code
   // unit but 3 bytes, so the two measures disagree by 3x.
   w = run(`
-    try { await marzi.saveState({ s: "\u20ac".repeat(30000) }); await marzi.call("probe.report", { tag: "euro-over", saved: true }); }
-    catch (e) { await marzi.call("probe.report", { tag: "euro-over", err: e.message }); }
-    try { await marzi.saveState({ s: "\u20ac".repeat(20000) }); await marzi.call("probe.report", { tag: "euro-under", saved: true }); }
-    catch (e) { await marzi.call("probe.report", { tag: "euro-under", err: e.message }); }`, "wid-E");
+    try { await darzi.saveState({ s: "\u20ac".repeat(30000) }); await darzi.call("probe.report", { tag: "euro-over", saved: true }); }
+    catch (e) { await darzi.call("probe.report", { tag: "euro-over", err: e.message }); }
+    try { await darzi.saveState({ s: "\u20ac".repeat(20000) }); await darzi.call("probe.report", { tag: "euro-under", saved: true }); }
+    catch (e) { await darzi.call("probe.report", { tag: "euro-under", err: e.message }); }`, "wid-E");
   await waitFor("euro-under"); w.destroy();
 
   // State goes through JSON, as the templates tell the model.
   w = run(`
-    await marzi.saveState({ when: new Date(0), nothing: NaN });
-    var back = await marzi.loadState();
-    await marzi.call("probe.report", { tag: "json-round-trip", when: back.when, nothing: back.nothing });`, "wid-J");
+    await darzi.saveState({ when: new Date(0), nothing: NaN });
+    var back = await darzi.loadState();
+    await darzi.call("probe.report", { tag: "json-round-trip", when: back.when, nothing: back.nothing });`, "wid-J");
   await waitFor("json-round-trip"); w.destroy();
 
   // The option sets the limit, in both directions. A JSON string has two quotes,
   // so 198 "x" are exactly 200 bytes. The default limit would refuse the large save.
   const tiny = createRuntime({ ...options, store: memoryStore(), stateLimitBytes: 200 });
   w = runOn(tiny, `
-    await marzi.saveState("x".repeat(198)); await marzi.call("probe.report", { tag: "at-limit", saved: true });
-    try { await marzi.saveState("x".repeat(199)); await marzi.call("probe.report", { tag: "over-limit", saved: true }); }
-    catch (e) { await marzi.call("probe.report", { tag: "over-limit", err: e.message }); }`, "wid-tiny");
+    await darzi.saveState("x".repeat(198)); await darzi.call("probe.report", { tag: "at-limit", saved: true });
+    try { await darzi.saveState("x".repeat(199)); await darzi.call("probe.report", { tag: "over-limit", saved: true }); }
+    catch (e) { await darzi.call("probe.report", { tag: "over-limit", err: e.message }); }`, "wid-tiny");
   await waitFor("over-limit"); w.destroy();
   const large = createRuntime({ ...options, store: memoryStore(), stateLimitBytes: 200000 });
   w = runOn(large, `
-    await marzi.saveState({ big: "x".repeat(100000) }); await marzi.call("probe.report", { tag: "large-limit", saved: true });`, "wid-large");
+    await darzi.saveState({ big: "x".repeat(100000) }); await darzi.call("probe.report", { tag: "large-limit", saved: true });`, "wid-large");
   await waitFor("large-limit"); w.destroy();
 
   // With no store, state calls are refused. They must not seem to work.
   const noStore = createRuntime(options);
   w = runOn(noStore, `
-    try { await marzi.saveState({ n: 1 }); await marzi.call("probe.report", { tag: "no-store-save", saved: true }); }
-    catch (e) { await marzi.call("probe.report", { tag: "no-store-save", err: e.message }); }
-    try { await marzi.loadState(); await marzi.call("probe.report", { tag: "no-store-load", loaded: true }); }
-    catch (e) { await marzi.call("probe.report", { tag: "no-store-load", err: e.message }); }`, "wid-none");
+    try { await darzi.saveState({ n: 1 }); await darzi.call("probe.report", { tag: "no-store-save", saved: true }); }
+    catch (e) { await darzi.call("probe.report", { tag: "no-store-save", err: e.message }); }
+    try { await darzi.loadState(); await darzi.call("probe.report", { tag: "no-store-load", loaded: true }); }
+    catch (e) { await darzi.call("probe.report", { tag: "no-store-load", err: e.message }); }`, "wid-none");
   await waitFor("no-store-load"); w.destroy();
   log("DONE");
 </script>

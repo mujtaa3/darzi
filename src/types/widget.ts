@@ -11,7 +11,7 @@ import type { RateWindow } from "./rpc.js";
 /**
  * A widget's HTML, exactly as the model wrote it.
  *
- * Hostile by assumption. marzi never trusts it, and runs it only inside the
+ * Hostile by assumption. darzi never trusts it, and runs it only inside the
  * jail.
  */
 export type WidgetBody = string;
@@ -22,7 +22,7 @@ export type WidgetBody = string;
  * `source` is JavaScript text that runs in a browser and sets a global (an
  * IIFE or UMD build). The runtime puts it inline in the frame's `<head>` when
  * the host names it in `RenderOptions.libs`. The host gets and pins this text
- * when it builds. marzi never fetches anything, so the frame stays without a
+ * when it builds. darzi never fetches anything, so the frame stays without a
  * network.
  *
  * The text runs inside the jail, so it has no authority: it cannot call
@@ -30,7 +30,7 @@ export type WidgetBody = string;
  * to trust, as it does for any other dependency.
  */
 export interface Library {
-  /** The name that the host uses in `RenderOptions.libs`, for example "chartjs". marzi does not interpret it. */
+  /** The name that the host uses in `RenderOptions.libs`, for example "chartjs". darzi does not interpret it. */
   name: string;
   /** The full library source, ready to run as one inline script. */
   source: string;

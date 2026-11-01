@@ -39,6 +39,6 @@ export interface AuditEvent {
    * not a widget. QUICKSTART.md names the reasons that stay the same until 1.0.
    */
   reason?: string;
-  /** The marzi `VERSION` that made the decision, so that old log entries stay clear after an upgrade. */
+  /** The darzi `VERSION` that made the decision, so that old log entries stay clear after an upgrade. */
   version: string;
 }

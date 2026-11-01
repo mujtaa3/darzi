@@ -90,5 +90,5 @@ export interface WidgetStore {
   putState(widgetId: string, json: string, signal?: AbortSignal): Promise<void>;
 }
 
-/** The part of the store that the runtime uses, for `marzi.saveState` and `marzi.loadState`. */
+/** The part of the store that the runtime uses, for `darzi.saveState` and `darzi.loadState`. */
 export type StateStore = Pick<WidgetStore, "getState" | "putState">;

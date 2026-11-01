@@ -1,7 +1,7 @@
 /**
  * The in-memory store: a ready-made WidgetStore for tests and first demos.
  *
- * marzi defines the storage contract (types/store.ts), and the app supplies
+ * darzi defines the storage contract (types/store.ts), and the app supplies
  * the real storage over its own backend, as it does for capabilities and
  * libraries.
  */

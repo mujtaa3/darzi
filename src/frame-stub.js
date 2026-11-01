@@ -1,6 +1,6 @@
 /**
  * The in-frame helper. It runs inside each widget frame, before the widget's
- * own code, and gives that code the `marzi` object.
+ * own code, and gives that code the `darzi` object.
  *
  * Plain browser JavaScript, not a module. `npm run build` copies this text
  * into src/frame-stub.ts as the string FRAME_STUB, because the frame has no
@@ -26,7 +26,7 @@
 
   // Send one message to the host. Before the port arrives, keep the message in
   // `queue`; the port's listener below sends the queue, in order, when the port
-  // comes. So widget code can call marzi at once, during the parse.
+  // comes. So widget code can call darzi at once, during the parse.
   function transmit(message) {
     if (port) { port.postMessage(message); } else { queue.push(message); }
   }
@@ -34,7 +34,7 @@
   // The whole in-frame API: the one object that widget code uses. It has three
   // methods, and each returns a promise. The prompt templates teach the model
   // these three, and nothing else.
-  window.marzi = {
+  window.darzi = {
     /**
      * Ask the host for something. Returns a promise.
      *
@@ -61,12 +61,12 @@
      * can refuse, so handle a rejection as for any call.
      */
     saveState: function (value) {
-      return window.marzi.call("marzi/saveState", { value: value });
+      return window.darzi.call("darzi/saveState", { value: value });
     },
 
     /** Resolves with the saved value, or with null when nothing was saved. */
     loadState: function () {
-      return window.marzi.call("marzi/loadState");
+      return window.darzi.call("darzi/loadState");
     }
   };
 
@@ -78,7 +78,7 @@
     var error = event.error;
     transmit({
       jsonrpc: "2.0",
-      method: "marzi/fault",
+      method: "darzi/fault",
       params: {
         message: String(event.message || "script error").slice(0, 300),
         // The error's type, when the thrown value has one, for example "TypeError".
@@ -97,7 +97,7 @@
     var text = reason && reason.message ? reason.message : reason;
     transmit({
       jsonrpc: "2.0",
-      method: "marzi/fault",
+      method: "darzi/fault",
       // A failed promise has a reason but no position: nothing threw on a line.
       params: {
         message: ("unhandled rejection: " + String(text)).slice(0, 300),
@@ -115,7 +115,7 @@
   window.addEventListener("message", function (event) {
     if (port) { return; }                     // accept one port for each load
     if (event.source !== host) { return; }    // and only from the host
-    if (!event.data || event.data.marzi !== "port") { return; }
+    if (!event.data || event.data.darzi !== "port") { return; }
 
     var incoming = event.ports && event.ports[0];
     if (!incoming) { return; }
@@ -143,5 +143,5 @@
 
   // Say "ready" to the host. The target origin "*" is safe here, because the
   // message carries no data.
-  host.postMessage({ marzi: "ready" }, "*");
+  host.postMessage({ darzi: "ready" }, "*");
 })();

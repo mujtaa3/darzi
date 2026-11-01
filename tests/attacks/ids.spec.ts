@@ -25,8 +25,8 @@ test("duplicate ids, names and bad number options are refused; destroy releases 
   expect(ok).toContain("distinct-names");
 
   // The reserved prefix, with look-alike names as the control.
-  expect(threw("reserved-prefix")).toContain('capability name "marzi/loadState" uses the reserved "marzi/" prefix');
-  expect(threw("reserved-prefix-new")).toContain('capability name "marzi/anything" uses the reserved "marzi/" prefix');
+  expect(threw("reserved-prefix")).toContain('capability name "darzi/loadState" uses the reserved "darzi/" prefix');
+  expect(threw("reserved-prefix-new")).toContain('capability name "darzi/anything" uses the reserved "darzi/" prefix');
   expect(ok).toContain("prefix-lookalike");
 
   // Number options: not a whole number, out of range, or missing.

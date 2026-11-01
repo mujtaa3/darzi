@@ -1,5 +1,5 @@
 /**
- * Frame settings — the two smaller settings on both of marzi's frames (bugs.md B24).
+ * Frame settings — the two smaller settings on both of darzi's frames (bugs.md B24).
  *
  * `allow=""` gives a frame no device features, so a widget cannot show a browser's
  * permission prompt that seems to come from the host. `referrerpolicy="no-referrer"`

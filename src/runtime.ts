@@ -59,12 +59,12 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   // call here.
   const registry = new Map<string, Capability>();
   for (const capability of options.capabilities) {
-    // The runtime keeps names that start with "marzi/" for its own messages
-    // (marzi/fault, marzi/saveState, marzi/loadState). The runtime checks those
+    // The runtime keeps names that start with "darzi/" for its own messages
+    // (darzi/fault, darzi/saveState, darzi/loadState). The runtime checks those
     // before the registry, so a registered copy could not run in their place.
     // The check keeps the prefix free, and fails loudly at setup.
-    if (capability.name.startsWith("marzi/")) {
-      throw new Error(`capability name "${capability.name}" uses the reserved "marzi/" prefix`);
+    if (capability.name.startsWith("darzi/")) {
+      throw new Error(`capability name "${capability.name}" uses the reserved "darzi/" prefix`);
     }
     // A second entry would replace the first without a warning, and the order
     // of the list would then decide which handler runs.
@@ -117,7 +117,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   // ── Reporting to the host: the two callbacks ───────────────────────────────
 
   /**
-   * Send a decision to `onAudit`, with the marzi `VERSION` added. Without
+   * Send a decision to `onAudit`, with the darzi `VERSION` added. Without
    * `onAudit`, it does nothing. A listener that throws cannot stop the
    * switchboard: the error goes to the console.
    */
@@ -126,7 +126,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     try {
       options.onAudit({ ...event, version: VERSION });
     } catch (error) {
-      console.error("[marzi] onAudit threw:", error);
+      console.error("[darzi] onAudit threw:", error);
     }
   }
 
@@ -137,18 +137,18 @@ export function createRuntime(options: RuntimeOptions): Runtime {
    */
   function reportFault(fault: WidgetFault): void {
     if (!options.onWidgetFault) {
-      console.warn(`[marzi] widget ${fault.widgetId} ${fault.kind}:`, fault.message);
+      console.warn(`[darzi] widget ${fault.widgetId} ${fault.kind}:`, fault.message);
       return;
     }
     try {
       options.onWidgetFault(fault);
     } catch (error) {
-      console.error("[marzi] onWidgetFault threw:", error);
+      console.error("[darzi] onWidgetFault threw:", error);
     }
   }
 
   /**
-   * Turn a widget's `marzi/fault` notification into a WidgetFault, and send
+   * Turn a widget's `darzi/fault` notification into a WidgetFault, and send
    * it to `onWidgetFault`.
    *
    * The stub sends a fault when the widget's code throws. But the widget can
@@ -221,7 +221,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   }
 
   /**
-   * Save or load a widget's state, for `marzi/saveState` and `marzi/loadState`.
+   * Save or load a widget's state, for `darzi/saveState` and `darzi/loadState`.
    *
    * The widget writes the state, so the runtime treats it like params: it
    * cleans it (no prototype keys, limited shape), then turns it into JSON
@@ -231,7 +231,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
    * also becomes a refusal.
    *
    * Store calls get the same deadline as capability calls. The store is host
-   * code that marzi does not control. A store that hangs must not keep the
+   * code that darzi does not control. A store that hangs must not keep the
    * call open, or finish a write after the widget is destroyed. The store gets
    * the signal, so that a store on the network can cancel its request.
    *
@@ -261,7 +261,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     try {
       // Load: ask the store for the saved JSON, and parse it. null means that
       // nothing was saved.
-      if (method === "marzi/loadState") {
+      if (method === "darzi/loadState") {
         audit({ widgetId: widget.id, method, decision: "dispatched" });
         const json = await untilAborted(options.store.getState(widget.id, signal), signal);
         if (json === ABANDONED) return abandon();
@@ -296,7 +296,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     } catch (error) {
       // As for capability handlers: the host sees the real error, the widget
       // never does, because error messages can contain internal details.
-      console.error(`[marzi] ${method} failed:`, error);
+      console.error(`[darzi] ${method} failed:`, error);
       audit({ widgetId: widget.id, method, decision: "refused", reason: "state operation failed" });
       return fail(id, RPC.INTERNAL_ERROR, "state operation failed");
     }
@@ -313,7 +313,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
    *
    * It returns the reply to send, or null for no reply. The gates, in order:
    *   1. the rate limit;
-   *   2. notifications (marzi/fault), which never get a reply;
+   *   2. notifications (darzi/fault), which never get a reply;
    *   3. the shape of the request;
    *   4. the built-in state methods;
    *   5. the capability lookup;
@@ -347,7 +347,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     // any other.
     const notification = parseNotification(raw);
     if (notification !== null) {
-      if (notification.method === "marzi/fault") reportScriptError(widget, notification.params);
+      if (notification.method === "darzi/fault") reportScriptError(widget, notification.params);
       return null;
     }
 
@@ -371,7 +371,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     // of the runtime, not app capabilities, and grants will apply only to the
     // registry. The widget id for the state comes from the port, never from
     // the message, so a widget cannot read or write another widget's state.
-    if (request.method === "marzi/saveState" || request.method === "marzi/loadState") {
+    if (request.method === "darzi/saveState" || request.method === "darzi/loadState") {
       return handleState(widget, request.id, request.method, request.params, callSignal(widget));
     }
 
@@ -419,7 +419,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     //                this one frees real resources.
     //   the race     stops the RUNTIME waiting for a handler that ignores the
     //                signal, or that is busy in a long computation. Handlers
-    //                are app code that marzi does not control.
+    //                are app code that darzi does not control.
     //
     // Without the race, a widget could fill memory: it could call a slow
     // handler in a loop, and each waiting promise would stay in memory.
@@ -447,7 +447,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       try {
         structuredClone(outcome);
       } catch (error) {
-        console.error(`[marzi] capability "${request.method}" returned a value that cannot be sent to a widget:`, error);
+        console.error(`[darzi] capability "${request.method}" returned a value that cannot be sent to a widget:`, error);
         audit({
           widgetId: widget.id,
           method: request.method,
@@ -464,7 +464,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       // real error goes to the host's console. The audit records the failure
       // before the widget hears of it, so the host can tell its own failure
       // from a widget bug.
-      console.error(`[marzi] capability "${request.method}" threw:`, error);
+      console.error(`[darzi] capability "${request.method}" threw:`, error);
       audit({ widgetId: widget.id, method: request.method, decision: "refused", reason: "capability failed" });
       return fail(request.id, RPC.INTERNAL_ERROR, "capability failed");
     }
@@ -534,12 +534,12 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     // Step 3. The outer frame. It is not in the page yet (see step 5).
     const frame = document.createElement("iframe");
 
-    // This frame is the WARDEN: marzi's frame, with no script. The widget's
+    // This frame is the WARDEN: darzi's frame, with no script. The widget's
     // own frame is inside it. The warden's `frame-src 'none'` stops the widget
     // from navigating itself away with data in the URL (see jail.ts).
     //
     // `sandbox` removes almost every permission, and each token gives one
-    // back. marzi gives exactly one. Nested frames inherit sandbox flags, so
+    // back. darzi gives exactly one. Nested frames inherit sandbox flags, so
     // the warden must allow scripts for the widget's scripts to run, although
     // the warden runs none. Without `allow-same-origin`, both frames belong to
     // no site, and each has a DIFFERENT opaque origin.
@@ -592,8 +592,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       // decode message after message, or open channel after channel.
       if (!withinRate(knocks, Date.now(), rateLimit.calls, rateLimit.windowMs)) return;
 
-      const data = event.data as { marzi?: unknown } | null;
-      if (!data || data.marzi !== "ready") return;
+      const data = event.data as { darzi?: unknown } | null;
+      if (!data || data.darzi !== "ready") return;
 
       // The stub sends "ready" once for each load of the frame. So each "ready"
       // means a new document that needs a port. That is true after a move,
@@ -632,10 +632,10 @@ export function createRuntime(options: RuntimeOptions): Runtime {
             if (response !== null) channel.port1.postMessage(response);
           })
           .catch((error: unknown) => {
-            console.error(`[marzi] reply to widget ${widget.id} failed:`, error);
+            console.error(`[darzi] reply to widget ${widget.id} failed:`, error);
           });
       };
-      inner.postMessage({ marzi: "port" }, "*", [channel.port2]);
+      inner.postMessage({ darzi: "port" }, "*", [channel.port2]);
     };
 
     // Close the current port. First clear `onmessage`, so the runtime does not

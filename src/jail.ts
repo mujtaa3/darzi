@@ -1,5 +1,5 @@
 /**
- * The jail: how marzi builds a widget's documents so that the browser confines
+ * The jail: how darzi builds a widget's documents so that the browser confines
  * the widget.
  *
  * Three separate mechanisms do the work. Each one controls a different thing:
@@ -11,7 +11,7 @@
  *                         so the frame cannot reach the network.
  *   the warden         →  NAVIGATION. Only the `frame-src` of the page that
  *                         embeds a frame controls that frame's navigation. The
- *                         host page is not ours, so marzi puts a frame that it
+ *                         host page is not ours, so darzi puts a frame that it
  *                         controls between the host and the widget. See
  *                         `warden()`.
  *
@@ -27,14 +27,14 @@ import { attributeSafe, inlineScriptSafe, lineBreaks } from "./helpers/jail.js";
 import type { Scaffold } from "./types/jail.js";
 
 /**
- * Put the model's HTML into a document whose head marzi writes.
+ * Put the model's HTML into a document whose head darzi writes.
  *
  * The CSP `<meta>` must come before every byte of the widget, because a meta
- * policy controls only what the parser reads after it. marzi writes the whole
+ * policy controls only what the parser reads after it. darzi writes the whole
  * document, so the widget can never put a tag before ours.
  *
  * The order in the head matters:
- *   1. the stub, so that `marzi` exists before any library runs;
+ *   1. the stub, so that `darzi` exists before any library runs;
  *   2. the vendored libraries, so that their globals exist when widget code
  *      runs during the parse;
  *   3. then the widget HTML, in the body.
@@ -78,7 +78,7 @@ ${libs}  </head>
 }
 
 /**
- * Put a widget document inside the warden: an outer frame that marzi controls.
+ * Put a widget document inside the warden: an outer frame that darzi controls.
  * Its `frame-src 'none'` stops the widget from navigating itself away with
  * data in the URL.
  *
